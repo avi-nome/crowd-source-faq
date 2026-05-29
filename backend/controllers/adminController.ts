@@ -4,6 +4,7 @@ import User, { IUser } from '../models/User.js';
 import SearchLog from '../models/SearchLog.js';
 import AdminLog from '../models/AdminLog.js';
 import CommunityPost from '../models/CommunityPost.js';
+import { invalidateCache } from '../utils/cache.js';
 
 const logAction = async (
   adminId: string,
@@ -293,6 +294,10 @@ export const updateFAQ = async (req: Request, res: Response): Promise<void> => {
       return;
     }
     await logAction(req.user!._id.toString(), 'edit_faq', faq._id.toString(), 'faq', faq.question);
+
+    // Invalidate search cache so updated FAQ reflects immediately
+    await invalidateCache();
+
     res.json({ message: 'FAQ updated.', faq });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
@@ -308,6 +313,10 @@ export const deleteFAQ = async (req: Request, res: Response): Promise<void> => {
       return;
     }
     await logAction(req.user!._id.toString(), 'delete_faq', faq._id.toString(), 'faq', faq.question);
+
+    // Invalidate search cache so deleted FAQ is removed from results
+    await invalidateCache();
+
     res.json({ message: 'FAQ deleted.' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
@@ -335,6 +344,10 @@ export const createFAQ = async (req: Request, res: Response): Promise<void> => {
       createdBy: req.user!._id,
     });
     await logAction(req.user!._id.toString(), 'create_faq', faq._id.toString(), 'faq', faq.question);
+
+    // Invalidate search cache so new FAQ appears in results immediately
+    await invalidateCache();
+
     res.status(201).json({ message: 'FAQ created.', faq });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
@@ -375,13 +388,28 @@ export const getReports = async (req: Request, res: Response): Promise<void> => 
 };
 
 // GET /api/admin/activity-feed
-export const getActivityFeed = async (_req: Request, res: Response): Promise<void> => {
+export const getActivityFeed = async (req: Request, res: Response): Promise<void> => {
   try {
-    const logs = await AdminLog.find()
-      .populate('adminId', 'name email')
-      .sort('-createdAt')
-      .limit(20);
-    res.json(logs);
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.max(1, Math.min(50, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+
+    const [logs, total] = await Promise.all([
+      AdminLog.find()
+        .populate('adminId', 'name email')
+        .sort('-createdAt')
+        .skip(skip)
+        .limit(limit),
+      AdminLog.countDocuments(),
+    ]);
+
+    res.json({
+      logs,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+      hasMore: skip + logs.length < total,
+    });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
   }
@@ -393,12 +421,18 @@ export const getUserActivityChart = async (req: Request, res: Response): Promise
     const days = parseInt(req.query.days as string) || 14;
     const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
+    // Aggregate actual search activity per day: count searches and unique users
     const searchActivity = await SearchLog.aggregate([
       { $match: { createdAt: { $gte: from } } },
       {
         $group: {
           _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
           searches: { $sum: 1 },
+          // Aggregate by distinct userId from SearchLog (topResultId captures which result was clicked,
+          // but we don't have a direct userId field — use result count as proxy for engagement)
+          // NOTE: SearchLog doesn't store userId — users field tracks search count as engagement proxy.
+          // For accurate user counts, a separate UserActivityLog would be needed.
+          userCount: { $sum: 1 },
         },
       },
       { $sort: { _id: 1 } },
@@ -412,7 +446,8 @@ export const getUserActivityChart = async (req: Request, res: Response): Promise
       result.push({
         date: dateStr,
         searches: found ? found.searches : 0,
-        users: Math.floor(Math.random() * 20 + 5),
+        // Use actual search count as engagement proxy (SearchLog has no userId field)
+        users: found ? found.userCount : 0,
       });
     }
 

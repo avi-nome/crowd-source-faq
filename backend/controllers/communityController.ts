@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import CommunityPost, { ICommunityPost } from '../models/CommunityPost.js';
 import { generateEmbedding } from '../utils/embeddings.js';
 import User, { IUser } from '../models/User.js';
+import { invalidateCache } from '../utils/cache.js';
 
 // Extend Express Request to include user (same pattern as auth middleware)
 declare global {
@@ -93,6 +94,9 @@ export const createPost = async (req: Request, res: Response): Promise<void> => 
     // Hydrate the author field before sending back the response
     await post.populate('author', 'name');
 
+    // Invalidate search cache so new post appears in community search immediately
+    await invalidateCache().catch(() => {});
+
     res.status(201).json({ post });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
@@ -153,6 +157,19 @@ export const addComment = async (req: Request, res: Response): Promise<void> => 
     await post.populate('comments.author', 'name');
     const newComment = post.comments[post.comments.length - 1];
 
+    // Notify the post author that someone commented on their post
+    if (post.author.toString() !== req.user!._id.toString()) {
+      import('./notificationController.js').then(n =>
+        n.createNotification({
+          recipient: post.author,
+          type: 'comment_replied',
+          title: 'New comment on your post',
+          message: `${req.user!.name} commented on "${post.title}": "${body.trim().slice(0, 80)}${body.trim().length > 80 ? '…' : ''}"`,
+          link: `/community?post=${post._id}`,
+        })
+      ).catch(() => {});
+    }
+
     res.status(201).json({ comment: newComment, total: post.comments.length });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
@@ -208,6 +225,9 @@ export const resolvePost = async (req: Request, res: Response): Promise<void> =>
       post.answerIsExpert = true;
     }
     await post.save();
+
+    // Invalidate search cache so resolved answer reflects immediately
+    await invalidateCache().catch(() => {});
 
     // Notify the post author that their question was resolved
     await import('./notificationController.js').then(n => 
@@ -275,6 +295,10 @@ export const deletePost = async (req: Request, res: Response): Promise<void> => 
       res.status(404).json({ message: 'Post not found.' });
       return;
     }
+
+    // Invalidate search cache so deleted post is removed from results
+    await invalidateCache().catch(() => {});
+
     res.json({ message: 'Post deleted successfully.' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });

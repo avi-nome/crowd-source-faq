@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
-import FAQ, { IFAQ } from '../models/FAQ';
-import { generateEmbedding } from '../utils/embeddings';
+import FAQ, { IFAQ } from '../models/FAQ.js';
+import { generateEmbedding } from '../utils/embeddings.js';
 import { logger } from '../utils/logger.js';
+import { invalidateCache } from '../utils/cache.js';
 
 // Query params interface for getAllFAQs
 interface GetAllFAQsQuery {
@@ -170,6 +171,9 @@ export const createFAQ = async (req: Request, res: Response): Promise<void> => {
       embedding,
     });
 
+    // Invalidate search cache so new FAQ appears in results immediately
+    await invalidateCache();
+
     res.status(201).json({ message: 'FAQ created successfully.', faq });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
@@ -199,6 +203,10 @@ export const updateFAQ = async (req: Request<{ id: string }>, res: Response): Pr
     }
 
     await faq.save();
+
+    // Invalidate search cache so updated FAQ reflects immediately
+    await invalidateCache();
+
     res.json({ message: 'FAQ updated successfully.', faq });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
@@ -213,6 +221,10 @@ export const deleteFAQ = async (req: Request<{ id: string }>, res: Response): Pr
       res.status(404).json({ message: 'FAQ not found.' });
       return;
     }
+
+    // Invalidate search cache so deleted FAQ is removed from results
+    await invalidateCache();
+
     res.json({ message: 'FAQ deleted successfully.' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: (error as Error).message });

@@ -69,10 +69,35 @@ start_frontend() {
   ok "Frontend PID $FRONTEND_PID"
 }
 
+# ── Check and kill existing processes ──────────────────────────
+kill_existing() {
+  local killed=0
+  for port in 5173 6767; do
+    local pid=$(lsof -ti:$port 2>/dev/null || true)
+    if [ -n "$pid" ]; then
+      warn "Killing existing process on port $port (PID $pid)"
+      kill -9 $pid 2>/dev/null || true
+      killed=1
+    fi
+  done
+  [ $killed -eq 1 ] && sleep 1 && ok "Cleared."
+}
+
+check_url_alive() {
+  curl -sf --max-time 2 http://localhost:5173 > /dev/null 2>&1
+}
+
 # ── Main ───────────────────────────────────────────────────
 echo ""
 log "Yaksha FAQ Portal"
 echo ""
+
+if check_url_alive; then
+  warn "Frontend already live on 5173 — clearing ports"
+  kill_existing
+else
+  ok "Port 5173 is free"
+fi
 
 start_backend
 wait_for_backend

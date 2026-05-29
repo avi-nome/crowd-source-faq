@@ -1,0 +1,1348 @@
+COMPLETE FEATURE INVENTORY AUDIT
+    Yaksha FAQ Portal — Technical Due Diligence
+    
+    
+    
+    FEATURE: USER AUTHENTICATION & SESSION MANAGEMENT
+    
+    Purpose
+    
+    Handles user registration, login, logout, JWT-based session management, profile updates, and password changes. Acts as the gatekeeping layer for all protected routes.
+    
+    Backend Implementation
+    
+    Routes (/api/auth):
+    - POST /register — Create account
+    - POST /login — Authenticate
+    - GET /me — Get current user
+    - PATCH /profile — Update name/email
+    - PUT /password — Change password
+    - GET /users — List all users (Admin)
+    - PATCH /users/:id/role — Update role (Admin)
+    - DELETE /users/:id — Delete user (Admin)
+    
+    Controllers (authController.ts):
+    - register: Validates fields, checks duplicate email, hashes password via Mongoose pre-save hook, generates JWT
+    - login: Finds user by email with +password select, compares bcrypt hash, generates JWT
+    - getMe: Returns sanitized user object from req.user (set by middleware)
+    - getAllUsers: Returns all users sorted by createdAt descending
+    - updateProfile: Partial update of name/email with duplicate email check
+    - changePassword: Validates current password, saves new hashed password
+    - updateUserRole: Admin-only role promotion/demotion
+    - deleteUser: Admin-only user deletion
+    
+    Middleware (middleware/auth.ts):
+    - protect: Extracts Bearer <token> from Authorization header, verifies JWT with JWT_SECRET, attaches req.user
+    - authorize(...roles): RBAC gate checking req.user.role against allowed roles
+    
+    Models (models/User.ts):
+    - Fields: name, email, password, role
+    - role enum: 'user' | 'moderator' | 'admin' | 'ai_moderator' | 'expert'
+    - password: select: false (not returned in normal queries), hashed via bcrypt salt factor 12 in pre-save hook
+    - comparePassword: bcrypt.compare instance method
+    - Indexes: email (unique)
+    
+    Database Collections:
+    - yaksha_faq_users
+    
+    API Endpoints
+    
+    | Method | Path                     | Auth      | Notes                           |
+    |--------|--------------------------|-----------|---------------------------------|
+    | POST   | /api/auth/register       | Public    | Returns {token, user}           |
+    | POST   | /api/auth/login          | Public    | Returns {token, user}           |
+    | GET    | /api/auth/me             | JWT       | Returns {user}                  |
+    | PATCH  | /api/auth/profile        | JWT       | Partial update                  |
+    | PUT    | /api/auth/password       | JWT       | Requires current + new password |
+    | GET    | /api/auth/users          | JWT+Admin | Paginated list                  |
+    | PATCH  | /api/auth/users/:id/role | JWT+Admin | Role update                     |
+    | DELETE | /api/auth/users/:id      | JWT+Admin | User deletion                   |
+    
+    Database Structure
+    
+    Users Collection (yaksha_faq_users):
+    
+    name: String (required, trimmed)
+    email: String (required, unique, lowercase, regex validated)
+    password: String (required, minlength 6, select: false, hashed bcrypt)
+    role: String enum (default: 'user')
+    createdAt: Date (auto)
+    updatedAt: Date (auto)
+    
+    Indexes: email (unique)
+    
+    Frontend Implementation
+    
+    Pages:
+    - LoginPage.tsx: Email+password form, navigates to / on success, shows error on failure
+    - RegisterPage.tsx: Name+email+password form, validates 6-char password, navigates to / on success
+    
+    State Management:
+    - AuthProvider (context) stores user, loading, isAuthenticated
+    - Token stored in localStorage as yaksha_token, user as yaksha_user
+    - On mount, if token exists, calls GET /auth/me to validate and hydrate user
+    - On 401, clears storage and redirects to /login
+    
+    Hooks:
+    - useAuth(): Returns {user, login, register, logout, loading, isAuthenticated}
+    
+    API Client (utils/api.ts):
+    - Axios instance with JWT interceptor (reads yaksha_token from localStorage)
+    - 401 response interceptor clears storage and redirects to /login
+    
+    User Experience
+    
+    1. User lands on /login, enters credentials
+    2. useAuth().login(email, password) → POST /auth/login
+    3. Token stored in localStorage, user hydrated into context
+    4. ProtectedRoute checks isAuthenticated, redirects to / if logged in
+    5. All API requests carry Authorization: Bearer <token>
+    6. Token never expires until explicitly invalidated (no refresh mechanism)
+    
+    Admin/Moderator Functionality
+    
+    - Admin can list all users at GET /auth/users
+    - Admin can update any user's role at PATCH /auth/users/:id/role
+    - Admin can delete any user at DELETE /auth/users/:id
+    - Moderator role cannot access user management endpoints (403 returned)
+    
+    Security Considerations
+    
+    - Passwords hashed with bcrypt (salt factor 12) before storage
+    - JWT secret validated on every protected request
+    - password field excluded from queries via select: false
+    - No token refresh mechanism — tokens valid for 7 days (JWT_EXPIRES_IN ?? '7d')
+    - Admin-only routes double-protected by both protect middleware and authorize('admin')
+    - Email uniqueness enforced at DB level
+    - Input validation present (name/email/password required, password minlength 6)
+    
+    Analytics/Logging
+    
+    - No authentication events are logged to the AdminLog collection currently
+    - Search log captures query but not user identity
+    
+    Current Limitations
+    
+    - No token refresh — if token expires, user must re-login manually
+    - No failed login attempt lockout (brute force vulnerable)
+    - No 2FA support
+    - No password reset / forgot password flow
+    - No login throttling (rate limit applies per IP globally but not per account)
+    - All logged-in users share same 7-day JWT expiry (no "remember me" option)
+    
+    Completion Status
+    
+    Fully Implemented — Core auth is complete. Missing password reset and token refresh are not critical for an internal FAQ portal but would be required for a public-facing production deployment.
+    
+    
+    
+    FEATURE: FAQ MANAGEMENT
+    
+    Purpose
+    
+    CRUD operations for Frequently Asked Questions, organized by category, with optional status workflow (pending/approved/rejected), helpfulness voting, and AI-powered FAQ matching for community posts.
+    
+    Backend Implementation
+    
+    Routes (/api/faq):
+    - GET / — All FAQs grouped by category (or flat paginated)
+    - GET /paginated — Flat paginated list
+    - POST /check-match — AI FAQ matching against user query
+    - GET /:id — Single FAQ
+    - POST / — Create FAQ (Admin/Moderator)
+    - PUT /:id — Update FAQ (Admin/Moderator)
+    - DELETE /:id — Delete FAQ (Admin/Moderator)
+    - PATCH /:id/feedback — Vote helpful/unhelpful (any logged-in user)
+    
+    Controllers (faqController.ts):
+    - getAllFAQs: Returns {grouped} by default (category-grouped), or flat paginated {faqs, total, page, pages} when limit param is set
+    - getPaginatedFAQs: Dedicated paginated endpoint with optional category filter
+    - getFAQById: Single FAQ fetch (404 if not found)
+    - createFAQ: Generates vector embedding on create (calls generateEmbedding()), stores in DB
+    - updateFAQ: Recalculates embedding if question/answer/category changed
+    - deleteFAQ: findByIdAndDelete
+    - checkFAQMatch: Uses $vectorSearch against vector_index with threshold 0.82; returns matched FAQ or null
+    - submitFeedback: Increments helpfulVotes or unhelpfulVotes counter
+    
+    Models (models/FAQ.ts):
+    - Fields: question, answer, category, embedding, searchCount, status, views, helpfulVotes, unhelpfulVotes, createdBy
+    - Text index on question + answer for keyword search
+    - embedding field has select: false (hidden from normal queries)
+    - Status enum: 'pending' | 'approved' | 'rejected'
+    
+    Database Collections:
+    - yaksha_faq_faqs
+    - Atlas vector index vector_index on embedding field (768-dim, cosine similarity)
+    
+    API Endpoints
+    
+    | Method | Path                  | Auth          | Notes                  |
+    |--------|-----------------------|---------------|------------------------|
+    | GET    | /api/faq              | JWT           | Grouped or paginated   |
+    | GET    | /api/faq/paginated    | JWT           | Flat paginated         |
+    | POST   | /api/faq/check-match  | JWT           | AI FAQ matching        |
+    | GET    | /api/faq/:id          | JWT           | Single FAQ             |
+    | POST   | /api/faq              | JWT+Mod/Admin | Create                 |
+    | PUT    | /api/faq/:id          | JWT+Mod/Admin | Update                 |
+    | DELETE | /api/faq/:id          | JWT+Mod/Admin | Delete                 |
+    | PATCH  | /api/faq/:id/feedback | JWT           | Vote helpful/unhelpful |
+    
+    Database Structure
+    
+    FAQs Collection (yaksha_faq_faqs):
+    
+    question: String (required, trimmed)
+    answer: String (required)
+    category: String (required, trimmed)
+    embedding: Number[] (768-dim, select: false)
+    searchCount: Number (default: 0)
+    status: String enum ['pending','approved','rejected'] (default: 'approved')
+    views: Number (default: 0)
+    helpfulVotes: Number (default: 0)
+    unhelpfulVotes: Number (default: 0)
+    createdBy: ObjectId (ref: User, default: null)
+    createdAt: Date (auto)
+    updatedAt: Date (auto)
+    
+    Indexes:
+    - Text index on {question: 'text', answer: 'text'}
+    - Vector index vector_index on embedding (managed in Atlas, not Mongoose)
+    
+    Frontend Implementation
+    
+    Pages:
+    - FAQPage.tsx: Browse FAQs by category, search, sort (recent/relevant), paginated list, question detail view, related questions, confidence scoring
+    
+    Components:
+    - CategoryGrid (category cards with top questions preview)
+    - QuestionList (sortable, paginated list with load-more)
+    - QuestionDetail (full question + answer with related items)
+    - SearchBar (with suggest dropdown)
+    - WordCloud (decorative category visualization)
+    
+    State: Component-level useState + useEffect fetching from GET /faq and GET /faq/paginated
+    
+    User Experience
+    
+    1. User navigates to /faq
+    2. Sees category grid with top questions per category
+    3. Can click category to see full question list
+    4. Can search within FAQ via SearchBar (uses /search/suggest)
+    5. Can sort list by "Most relevant" or "Most recent"
+    6. Can click any question to see full answer
+    7. Can vote helpful/unhelpful on FAQ
+    
+    Admin/Moderator Functionality
+    
+    - Moderator/Admin can create, edit, delete FAQs
+    - FAQs have status: pending/approved/rejected
+    - Admin panel (AdminFAQs.tsx) has full CRUD with approve/reject workflow
+    - Failed queries from search analytics can be converted to FAQs directly
+    
+    Security Considerations
+    
+    - All FAQ routes require JWT (protect middleware)
+    - Write operations require admin or moderator role via authorize()
+    - embedding field not returned in normal queries (select: false)
+    - Input validation: all required fields checked before DB write
+    - No rate limiting specific to FAQ endpoints (uses global API limiter)
+    
+    Analytics/Logging
+    
+    - searchCount field exists on FAQ but is never incremented in current code — dead field
+    - views field exists but is never incremented — dead field
+    - helpfulVotes/unhelpfulVotes properly tracked
+    - Admin actions on FAQs logged to AdminLog (approve/reject/edit/delete/create)
+    
+    Current Limitations
+    
+    - searchCount and views fields are never written to — purely stored
+    - createdBy field is set on admin-created FAQs but the user's name is never populated when listing FAQs (only createdBy: ObjectId stored)
+    - FAQ creation does not validate for duplicate questions
+    - No soft delete / archive functionality
+    
+    Completion Status
+    
+    Fully Implemented — Core FAQ CRUD, AI matching, and voting are functional. Dead analytics fields (searchCount, views) are cosmetic issues, not functional gaps.
+    
+    
+    
+    FEATURE: COMMUNITY Q&A FORUM
+    
+    Purpose
+    
+    Allows authenticated users to post questions, receive community comments, upvote/downvote, get verified expert answers from moderators, and have posts resolved by moderators with an official answer. Auto-moderation deletes comments with net score <= -5.
+    
+    Backend Implementation
+    
+    Routes (/api/community):
+    - GET /search — Search community posts (vector + text)
+    - GET /solved — Get recently resolved posts (public)
+    - GET / — All posts (paginated, protected)
+    - GET /:id — Single post
+    - POST / — Create post
+    - POST /:id/upvote — Toggle upvote
+    - POST /:id/comments — Add comment
+    - POST /:id/comments/:commentId/upvote — Toggle comment upvote
+    - POST /:id/comments/:commentId/downvote — Toggle comment downvote (auto-delete at -5)
+    - PATCH /:id/comments/:commentId/verify — Verify comment (Admin/Mod)
+    - PATCH /:id/resolve — Mark as answered (Admin/Mod)
+    - POST /:id/request-expert — Request expert help (user)
+    - DELETE /:id — Delete post (Admin/Mod)
+    
+    Controllers (communityController.ts):
+    - getAllPosts: Paginated, excludes embeddings, populated author and comments.author
+    - getPostById: Single post fetch
+    - createPost: Creates with default status: 'unanswered', generates embedding (non-blocking failure), sets author
+    - toggleUpvote: Toggle logic, removes if already upvoted, pushes if not
+    - addComment: Appends comment subdocument, populated after save
+    - toggleCommentUpvote: Adds upvote, removes downvote (mutex between up/down)
+    - toggleCommentDownvote: Adds downvote, removes upvote; auto-deletes comment when net score <= -5 via comment.deleteOne()
+    - verifyComment: Toggles verified boolean on comment
+    - resolvePost: Sets status: 'answered', answer field, answerIsExpert flag; notifies post author via notification system
+    - requestExpertHelp: Notifies all moderators/admins via notification system
+    - deletePost: findByIdAndDelete
+    
+    Models (models/CommunityPost.ts):
+    - Subdocument: commentSchema with author, body, upvotes[], downvotes[], verified, isExpertAnswer
+    - Post fields: title, body, author, status, answer, answerIsExpert, upvotes[], comments[], embedding
+    - Text index on {title: 'text', body: 'text'}
+    - embedding has select: false
+    
+    Database Collections:
+    - yaksha_faq_communityposts
+    
+    API Endpoints
+    
+    | Method | Path                                      | Auth          | Notes                         |
+    |--------|-------------------------------------------|---------------|-------------------------------|
+    | GET    | /api/community/search                     | JWT           | Vector+text search            |
+    | GET    | /api/community/solved                     | Public        | For "Top Solved Today" widget |
+    | GET    | /api/community                            | JWT           | Paginated list                |
+    | GET    | /api/community/:id                        | JWT           | Single post                   |
+    | POST   | /api/community                            | JWT           | Create post                   |
+    | POST   | /api/community/:id/upvote                 | JWT           | Toggle upvote                 |
+    | POST   | /api/community/:id/comments               | JWT           | Add comment                   |
+    | POST   | /api/community/:id/comments/:cid/upvote   | JWT           | Toggle comment upvote         |
+    | POST   | /api/community/:id/comments/:cid/downvote | JWT           | Toggle comment downvote       |
+    | PATCH  | /api/community/:id/comments/:cid/verify   | JWT+Mod/Admin | Toggle verified               |
+    | PATCH  | /api/community/:id/resolve                | JWT+Mod/Admin | Resolve with answer           |
+    | POST   | /api/community/:id/request-expert         | JWT           | Request help                  |
+    | DELETE | /api/community/:id                        | JWT+Mod/Admin | Delete post                   |
+    
+    Database Structure
+    
+    Community Posts Collection (yaksha_faq_communityposts):
+    
+    title: String (required)
+    body: String (required)
+    author: ObjectId (ref: User)
+    status: String enum ['answered','unanswered'] (default: 'unanswered')
+    answer: String (default: null)
+    answerIsExpert: Boolean (default: false)
+    upvotes: ObjectId[] (ref: User)
+    comments: [
+      author: ObjectId (ref: User)
+      body: String (maxlength 1000)
+      upvotes: ObjectId[] (ref: User)
+      downvotes: ObjectId[] (ref: User)
+      verified: Boolean (default: false)
+      isExpertAnswer: Boolean (default: false)
+      createdAt: Date
+      updatedAt: Date
+    ]
+    embedding: Number[] (select: false)
+    createdAt: Date (auto)
+    updatedAt: Date (auto)
+    
+    Indexes:
+    - Text index on {title: 'text', body: 'text'}
+    - Vector index vector_index on embedding
+    
+    Frontend Implementation
+    
+    Pages:
+    - CommunityPage.tsx: Paginated post list, create post dialog, post detail dialog, comment system with up/downvotes, expert answer display, verify comment, resolve post
+    
+    Components:
+    - CommunityPostCard: Shows post title, author, status badge, upvote count, comment count
+    - PostDetailDialog: Full post view with comments, upvote button, comment form, resolve form (mod only), expert help request
+    - CreatePostDialog: Title + body form with FAQ match checking (debounced, calls /faq/check-match)
+    
+    State: Component-level useState + API calls via api utility
+    
+    User Experience
+    
+    1. User visits /community, sees paginated list of posts
+    2. Can click "Ask Question" to open create dialog
+    3. As they type title, FAQ matching runs (debounced, 350ms) to suggest existing answers
+    4. If no FAQ match, posts question; sees it in list
+    5. Can click any post to open detail dialog
+    6. Can upvote posts and comments
+    7. Can add comments
+    8. If question remains unanswered, can click "Request Expert Help" → notifies moderators
+    9. Moderator can resolve with an official answer (shown as Expert/Admin answer)
+    10. Moderator can verify comments
+    11. Comments with net downvote score <= -5 are auto-deleted with "obliterated" response
+    
+    Admin/Moderator Functionality
+    
+    - AdminCommunity.tsx: List posts, resolve (with answer text), delete posts
+    - Mark comment as verified top answer
+    - Delete any post
+    - All admin actions on community posts are logged via logAction to AdminLog
+    
+    Security Considerations
+    
+    - All community routes require protect middleware
+    - Moderator-only routes use authorize('admin', 'moderator')
+    - Comment body maxlength 1000 enforced at schema level
+    - Comment upvote/downvote operates on user ObjectId arrays — no duplicate voting possible
+    - Post deletion only accessible to admin/moderator
+    
+    Analytics/Logging
+    
+    - Posts have upvote counts tracked in-memory in upvotes array
+    - Comment scores tracked per comment
+    - Auto-deletion of negative comments logged as console message in controller
+    - No analytics events for community interactions in SearchLog or AdminLog unless triggered by admin action
+    
+    Current Limitations
+    
+    - No edit functionality for posts once created
+    - No edit/delete for comments by author
+    - No "report post" or "report comment" functionality
+    - No notification to comment author when their comment is verified
+    - No notification when a comment is auto-deleted due to downvotes
+    - No "bump" or activity sorting — posts sorted by createdAt desc only
+    
+    Completion Status
+    
+    Fully Implemented — Core community forum with upvotes, comments, moderation, expert answers, and auto-moderation is complete. Gaps are in user-facing moderation (edit own comments, report) which are secondary features.
+    
+    
+    
+    FEATURE: HYBRID SEARCH (VECTOR + KEYWORD)
+    
+    Purpose
+    
+    Provides semantic (AI-powered vector) and keyword text search across both FAQs and community posts using Reciprocal Rank Fusion (RRF) to merge results from both rankers. Results cached in Redis (Upstash) with LRU fallback.
+    
+    Backend Implementation
+    
+    Routes (/api/search):
+    - POST / — Execute hybrid search (JWT protected)
+    - GET /trending — Get top 6 trending queries (JWT protected)
+    - GET /suggest — Lightweight FAQ text suggestions (Public)
+    
+    Controllers (searchController.ts):
+    - semanticSearch:
+      1. Check Redis cache → return if hit
+      2. Check LRU cache (process-local) → return if hit, promote to Redis
+      3. Generate embedding via @xenova/transformers
+      4. Run 4 searches in parallel: vector + text over both collections
+      5. Apply source tags (faq vs community)
+      6. Merge results via computeRRF() (RRF_K=60)
+      7. Apply threshold filter (textScore > 0 OR vectorScore > 0.80)
+      8. Cache in LRU + Redis
+      9. Fire-and-forget: log to SearchLog
+      10. Return top 5 results
+    - getTrending: Aggregate SearchLog by normalized query, sort by count desc, limit 6
+    - getSuggest: Regex search on question field, filters by status: 'approved', no auth required
+    
+    Utils (utils/search.ts):
+    - computeRRF(vectorResults, textResults): Standard RRF with k=60, merges ranked lists
+    - applySearchThreshold(results): Filters to textScore > 0 OR vectorScore > 0.80
+    
+    Utils (utils/embeddings.ts):
+    - @xenova/transformers with Xenova/multi-qa-mpnet-base-dot-v1 (768-dim, mean-pooled, normalized)
+    - Singleton cachedEmbedder initialized once, reused
+    - warmEmbedder() pre-loads model (called by /api/warm endpoint)
+    - generateEmbedding(text) → number[]
+    
+    Utils (utils/cache.ts):
+    - Upstash Redis with lazy singleton initialization
+    - Hash query with djb2-style hash → sc:<hash> cache key
+    - TTL: 1 hour for search results
+    - getCachedResults(query) → results or null
+    - setCachedResults(query, results) → stores with TTL
+    - invalidateCache() → deletes all result:* keys (not connected to any flow)
+    
+    API Endpoints
+    
+    | Method | Path                 | Auth   | Notes                            |
+    |--------|----------------------|--------|----------------------------------|
+    | POST   | /api/search          | JWT    | Hybrid search, returns 5 results |
+    | GET    | /api/search/trending | JWT    | Top 6 trending queries           |
+    | GET    | /api/search/suggest  | Public | FAQ text suggestions             |
+    
+    Database Structure
+    
+    Search Log Collection (yaksha_faq_searchlogs):
+    
+    query: String (required)
+    resultsCount: Number (default: 0)
+    topResultId: ObjectId (default: null)
+    topResultSource: String enum ['faq','community',null] (default: null)
+    createdAt: Date (auto)
+    updatedAt: Date (auto)
+    
+    
+    Frontend Implementation
+    
+    Pages:
+    - HomePage.tsx: Main search interface with hero section, category grid, search bar with dropdown, results panel, trending queries, popular searches
+    
+    Components:
+    - SearchBar: Controlled input, debounced, calls POST /search
+    - SearchResults: Expandable result items with confidence tags (High/Medium), source badges
+    - TrendingIssues: Shows trending search queries (from GET /search/trending)
+    - CategoryGrid: Category pills with icons for quick search
+    - TopSolved: Widget showing recently resolved community posts
+    - CTA: "Need human answer?" prompt linking to community
+    
+    State: Component-level useState for query, results, trending, loading states
+    
+    User Experience
+    
+    1. User on home page types in SearchBar
+    2. At 3+ characters, results panel appears with live search results
+    3. Results show with source badge (FAQ/Community), category, confidence tag
+    4. Can expand result to see full answer
+    5. Left panel shows matching questions, right panel shows suggestions and trending
+    6. Can click category pill to search that category
+    7. If no results, shows "No matches found. Try a different phrase or ask the community."
+    8. Popular searches shown below suggestions
+    
+    Admin/Moderator Functionality
+    
+    - AdminSearch.tsx: Shows top search keywords, search activity over time, failed query heatmap
+    - AdminAnalytics.tsx: Shows failedQueries with "Add to FAQ" button to convert failed query to FAQ
+    - Search insights used to identify content gaps
+    
+    Security Considerations
+    
+    - /search requires JWT (protected)
+    - /search/suggest is public — no auth required (only returns FAQ titles/categories)
+    - Rate limiting: 300 req/15min per IP via global apiLimiter
+    - No query injection possible in getSuggest (regex chars escaped)
+    - No user identity stored with search logs
+    
+    Analytics/Logging
+    
+    - Every POST /search logs: query, resultsCount, topResultId, topResultSource, timestamp
+    - getTrending reads from SearchLog aggregation
+    - AdminAnalytics shows failed queries (resultsCount=0)
+    - No real-time analytics — all aggregate-based
+    - trending queries endpoint is unauthenticated — public
+    
+    Current Limitations
+    
+    - Search log has no index — aggregation queries on large datasets will be slow
+    - invalidateCache() exists but is never called — cache only expires via TTL
+    - No search analytics by user — only aggregate counts
+    - No A/B testing or result click tracking
+    - Upstash cache is per-deployment — different Vercel instances don't share cache unless using same Upstash instance (which is configured via env vars, so they do share it — but the in-process LRU cache is per-instance)
+    
+    Completion Status
+    
+    Fully Implemented — Hybrid search, caching, trending, suggest are all functional. Missing click tracking and result relevance feedback are nice-to-haves.
+    
+    
+    
+    FEATURE: ADMIN DASHBOARD & ANALYTICS
+    
+    Purpose
+    
+    Comprehensive admin panel for managing FAQs, community posts, users, viewing system analytics, search insights, reports, and activity feed.
+    
+    Backend Implementation
+    
+    Routes (/api/admin):
+    - GET /stats — Platform stats
+    - GET /faq-growth — FAQ growth over time
+    - GET /top-categories — Category breakdown
+    - GET /search-insights — Search analytics
+    - GET /users — User list (paginated, searchable)
+    - GET /faqs — FAQ list (paginated, filterable)
+    - GET /reports — Reports data (FAQs + SearchLogs)
+    - GET /activity-feed — Admin action logs
+    - GET /user-activity-chart — User/search activity chart
+    - GET /community/posts — Community post list
+    - POST /faq — Create FAQ via admin
+    - POST /faq/approve — Approve FAQ
+    - POST /faq/reject — Reject FAQ
+    - PUT /faq/:id — Update FAQ
+    - DELETE /faq/:id — Delete FAQ
+    - DELETE /community/:id — Delete community post
+    
+    Controllers (adminController.ts):
+    - getStats: Parallel fetches of FAQ counts (total/pending/approved/rejected), user counts, search counts; computes FAQ trend %; finds top category
+    - getFaqGrowth: Groups FAQs by day over specified period, fills missing days with 0
+    - getTopCategories: Groups by category, sorts by count desc, limit 10, includes views sum
+    - getSearchInsights: Top 15 queries, failed search count, fail rate, 7-day activity chart
+    - getUsers: Paginated user list with search on name/email
+    - getAdminFAQs: Paginated FAQ list with filters (status, category, search), sorts, populates createdBy
+    - getReports: Returns recent FAQs + search logs + category/status breakdowns
+    - getActivityFeed: Recent 20 admin action logs
+    - getUserActivityChart: Search activity over N days (users count is random — see limitations)
+    - getCommunityPosts: Paginated community post list with search/status filters
+    - approveFAQ/rejectFAQ/updateFAQ/deleteFAQ/createFAQ: Standard CRUD with logAction to AdminLog
+    - deleteCommunityPost: Deletes post with logAction
+    
+    Routes (/api/analytics):
+    - GET / — Aggregate search analytics (total, popular queries, failed queries)
+    - GET /failed-queries — Top 30 failed queries from last 7 days
+    
+    Controllers (analyticsController.ts):
+    - getSearchAnalytics: Total searches, top 10 popular queries, top 20 failed queries
+    - getFailedQueries: Top 30 failed queries from last 7 days with count and last searched
+    
+    Models:
+    - AdminLog: Tracks admin actions — adminId, action, targetId, targetType, details, timestamps
+    - Actions: 'approve_faq' | 'reject_faq' | 'edit_faq' | 'delete_faq' | 'create_faq' | 'login' | 'settings_update'
+    
+    API Endpoints
+    
+    See above table. All /api/admin/* routes require adminOnly middleware (verifies JWT + admin/moderator role).
+    
+    Database Structure
+    
+    AdminLog Collection (yaksha_faq_adminlogs):
+    
+    adminId: ObjectId (ref: User, required)
+    action: String enum (required)
+    targetId: ObjectId (default: null)
+    targetType: String enum ['faq','user','system',null] (default: null)
+    details: String (default: '')
+    createdAt: Date (auto)
+    updatedAt: Date (auto)
+    
+    
+    SearchLog Collection (yaksha_faq_searchlogs):
+    
+    query: String (required)
+    resultsCount: Number (default: 0)
+    topResultId: ObjectId (default: null)
+    topResultSource: String enum (default: null)
+    createdAt: Date (auto)
+    updatedAt: Date (auto)
+    
+    
+    Frontend Implementation
+    
+    Pages (all under /admin/*):
+    - AdminDashboard.tsx: Stats cards (8 KPIs), FAQ growth chart (21d), resolution rate chart, user activity chart (14d), category pie chart, search keywords bar chart
+    - AdminFAQs.tsx: Paginated FAQ table with search, status/category filters, sort, create/edit/delete/approve/reject modals, toast notifications
+    - AdminAnalytics.tsx: KPIs (total FAQs, searches, resolution rate, users), FAQ growth chart, category pie chart, user activity chart, failed queries table with "Add to FAQ" action, date range selector (7/14/30/90d)
+    - AdminUsers.tsx: Paginated user list with search, role change modal, delete confirmation, role color badges
+    - AdminSearch.tsx: Top search keywords bar chart, search activity heatmap, recent activity
+    - AdminReports.tsx: Exportable reports (FAQ list, search logs, category breakdown, status breakdown), date range filter, export format options
+    - AdminSettings.tsx: Notification preference toggles (newFaq, pendingApproval, newUser, systemAlerts, weeklyReport)
+    - AdminCommunity.tsx: Community post list with status filter, resolve/delete actions
+    - AdminLogin.tsx: Standalone login page for admin
+    - AdminPage.tsx (legacy /admin/old): Tabbed admin panel (Analytics/FAQ Management/Community Moderation/User Management)
+    
+    Components:
+    - AdminLayout: Dark-themed layout with sidebar navigation and top navbar
+    - AdminSidebar: Nav links to all admin sections with active state
+    - StatsCard: Animated stat card with trend indicator
+    - StatsCardSkeleton / ChartSkeleton: Loading placeholders
+    - FAQGrowthChart: Line chart (Recharts)
+    - UserActivityChart: Combined line chart (searches + users)
+    - CategoryPieChart: Pie chart
+    - SearchBarChart: Bar chart
+    - ResolutionChart: Custom resolution rate donut
+    - Badge: Status badges (success/warning/accent/cyan)
+    - Modal: Modal dialog component
+    
+    API Client (admin/utils/adminApi.ts):
+    - Same Axios pattern as api.ts but redirects to /admin/login on 401/403
+    
+    User Experience
+    
+    Admin navigates to /admin (redirected to login if not authenticated), sees:
+    1. Dashboard: 8 KPI cards, 4 charts showing system health
+    2. FAQs: Searchable/filterable table with CRUD actions, approve/reject workflow
+    3. Analytics: Deeper performance data with date range selector, failed query conversion
+    4. Users: Paginated user list with role management
+    5. Search: Search term performance visualization
+    6. Reports: Exportable system data
+    7. Settings: Notification preferences
+    8. Community: Post moderation
+    
+    Admin/Moderator Functionality
+    
+    Fully implemented. Moderator has access to all admin routes (adminOnly accepts both 'admin' and 'moderator' roles).
+    
+    Security Considerations
+    
+    - All admin routes use adminOnly middleware (verifies token + admin/moderator role)
+    - No cross-user data access — queries filter by recipient or adminId
+    - AdminLog action tracking for auditability
+    - Rate limiting on /api/admin endpoint (1000 req/15min, higher than general API)
+    
+    Analytics/Logging
+    
+    - Admin action audit trail in AdminLog (covers FAQ and community operations)
+    - Search analytics in SearchLog
+    - Failed query tracking with 7-day window
+    - User activity chart generates random users values (see Current Limitations)
+    
+    Current Limitations
+    
+    1. getUserActivityChart returns fake user counts: Line 415-416 in adminController.ts sets users: Math.floor(Math.random() * 20 + 5) — completely random, not from any actual data
+    2. SearchLog has no index — aggregation queries on createdAt and query will be slow at scale
+    3. No actual export functionality in AdminReports — UI has "Export" buttons but no file download implementation
+    4. activity-feed endpoint has no pagination — returns only last 20 entries with no way to see older records
+    5. Admin notification settings exist in DB and API but the notification delivery mechanism (email, push) is not implemented — settings are stored but never read to gate any delivery
+    
+    Completion Status
+    
+    Partially Implemented — Core admin panel is substantial. The main gaps are: fake data in user activity chart, missing export, no pagination on activity feed, and notification settings stored but not used.
+    
+    
+    
+    FEATURE: NOTIFICATION SYSTEM
+    
+    Purpose
+    
+    In-app notifications for: post resolved, comment replied, FAQ match found, mention, expert request. Users can read, mark as read, delete notifications, and configure their notification preferences.
+    
+    Backend Implementation
+    
+    Routes (/api/notifications):
+    - GET / — Get all notifications (JWT)
+    - GET /unread-count — Get unread count (JWT)
+    - PATCH /:id/read — Mark single as read (JWT)
+    - PATCH /read-all — Mark all as read (JWT)
+    - DELETE /:id — Delete notification (JWT)
+    - GET /settings — Get notification preferences (JWT)
+    - PATCH /settings — Update preferences (JWT)
+    
+    Controllers (notificationController.ts):
+    - createNotification (internal helper, exported): Creates notification document. Non-critical — errors swallowed so notification failures don't break parent operations. Used by communityController.resolvePost and communityController.requestExpertHelp
+    - getNotifications: Returns last 50 notifications for req.user._id, sorted by createdAt desc
+    - getUnreadCount: Counts {recipient: userId, read: false}
+    - markAsRead: findOneAndUpdate with recipient filter (users can only mark their own)
+    - markAllAsRead: updateMany for all unread of user
+    - deleteNotification: findOneAndDelete with recipient filter
+    
+    Controllers (notificationSettingsController.ts):
+    - getSettings: Gets NotificationSettings for user, creates defaults if missing
+    - updateSettings: Updates specific preference keys, uses upsert: true
+    
+    Models:
+    - Notification: recipient, type, title, message, link, read, timestamps
+    - Types: 'post_resolved' | 'comment_replied' | 'faq_match_found' | 'mention' | 'expert_request'
+    - Compound index: {recipient: 1, read: 1, createdAt: -1}
+    - NotificationSettings: user (unique), newFaq, pendingApproval, newUser, systemAlerts, weeklyReport (all Boolean)
+    
+    Database Collections:
+    - yaksha_faq_notifications
+    - notificationSettings (no explicit collection name, Mongoose defaults)
+    
+    Frontend Implementation
+    
+    Hooks:
+    - useNotifications.tsx: Likely fetches unread count and notifications (not fully read in limited file reads)
+    
+    Components:
+    - NotificationBell: Likely shows unread count badge (referenced in Navbar possibly)
+    
+    State: Likely component-level or context-level
+    
+    User Experience
+    
+    1. When a post is resolved, user gets a post_resolved notification with link to post
+    2. When expert help is requested, moderators/admins get expert_request notifications
+    3. User can view notification list, mark individual as read, mark all as read, delete
+    4. User can configure which notification types they want via settings
+    
+    Admin/Moderator Functionality
+    
+    - Moderators/admins receive expert_request notifications when users request help
+    - Notification preferences apply to all users
+    
+    Security Considerations
+    
+    - All notification routes require protect middleware
+    - recipient filter on all queries ensures users can only access their own notifications
+    - No injection possible (ObjectId type validation)
+    
+    Analytics/Logging
+    
+    - Notifications are created but no analytics on notification open rate, click rate, etc.
+    - No logging of notification delivery
+    
+    Current Limitations
+    
+    1. Notification delivery mechanism is not implemented: Settings are stored in DB but there's no code that reads them to gate email/push delivery — they exist purely as preferences with no effect
+    2. Weekly report notification is defined in settings schema but no cron job or scheduled process generates weekly reports
+    3. comment_replied and mention notification types are defined but there is no code in the controllers that creates these notification types when someone replies to a comment or mentions a user
+    4. No real-time notification delivery — user must refresh or poll to see new notifications
+    
+    Completion Status
+    
+    Partially Implemented — Notification storage and CRUD operations are complete. The notification types post_resolved and expert_request are wired up (triggered from resolvePost and requestExpertHelp). However, comment_replied and mention are defined but never created. Notification settings are stored but never used to gate any delivery. Weekly report has no generation mechanism.
+    
+    
+    
+    FEATURE: EMBEDDINGS & VECTOR SEARCH INFRASTRUCTURE
+    
+    Purpose
+    
+    Provides the AI embedding pipeline for semantic search — loads a transformer model, generates 768-dim vectors for FAQ and community post content, and stores them in MongoDB Atlas for vector search.
+    
+    Backend Implementation
+    
+    Utils (utils/embeddings.ts):
+    - Uses @xenova/transformers (WebAssembly-based, no server GPU needed)
+    - Model: Xenova/multi-qa-mpnet-base-dot-v1 (768-dim, dot-product similarity)
+    - Singleton pattern: cachedEmbedder initialized once, reused
+    - generateEmbedding(text): Returns number[] via mean pooling + normalization
+    - warmEmbedder(): Pre-loads model (called by POST /api/warm)
+    
+    Usage in controllers:
+    - faqController.createFAQ: Generates embedding on create
+    - faqController.updateFAQ: Regenerates embedding if content changed
+    - communityController.createPost: Generates embedding (non-critical failure is caught)
+    - searchController.semanticSearch: Generates query embedding for vector search
+    - communitySearchController.searchCommunityPosts: Generates query embedding
+    
+    Database:
+    - Atlas vector index vector_index on yaksha_faq_faqs.embedding and yaksha_faq_communityposts.embedding
+    - 768 dimensions, cosine similarity
+    - numCandidates: 50 (FAQ match), numCandidates: 100 (community search)
+    
+    Frontend Implementation
+    
+    No direct frontend interaction with embeddings. Frontend consumes search results which are powered by vector search.
+    
+    Current Limitations
+    
+    1. No auto-embedding on community post update: updatePost does not regenerate embedding when post is edited
+    2. No auto-embedding on FAQ bulk import: If an FAQ is updated via admin panel without going through the updateFAQ controller, embedding won't be regenerated
+    3. Cold start: Model is lazy-loaded on first generateEmbedding call — first search request is slow. /api/warm exists but isn't automatically called in production
+    4. No model versioning: If the model needs to change, all existing embeddings must be regenerated via backfill:embeddings script
+    
+    Completion Status
+    
+    Fully Implemented — Core embedding pipeline works. Cold start and update regeneration are operational concerns, not missing features.
+    
+    
+    
+    FEATURE: CACHING LAYER (REDIS + LRU)
+    
+    Purpose
+    
+    Reduce redundant AI embedding generation and search computation by caching results. Uses Upstash Redis (serverless-compatible) as shared cache, with in-process LRU as fallback.
+    
+    Backend Implementation
+    
+    Utils (utils/cache.ts):
+    - Lazy singleton Redis client (only initializes if REDIS_URL + REDIS_TOKEN set)
+    - Query hashing: djb2-style string hash → sc:<hash> cache key
+    - Cache TTL: 1 hour (RESULT_TTL = 60 * 60)
+    - getCachedResults(query): Redis GET, returns null on miss
+    - setCachedResults(query, results): Redis SET with TTL
+    - invalidateCache(): Deletes all result:* keys
+    
+    Integration in searchController.ts:
+    1. Check Redis cache (shared across all serverless instances)
+    2. Check LRU cache (process-local)
+    3. On LRU hit, promote to Redis for cross-instance benefit
+    4. On miss, compute and store in both LRU + Redis
+    
+    Frontend Implementation
+    
+    No frontend interaction with cache directly. Frontend sees faster search results due to caching.
+    
+    Current Limitations
+    
+    1. invalidateCache() is never called: Cache invalidation function exists but no code path triggers it. When FAQ content changes, stale results may be served until TTL expiry.
+    2. No cache warming on deployment: No mechanism to pre-warm cache with popular queries
+    3. Redis failure is silently swallowed: If Redis is unavailable, cache just returns null — no alerting
+    4. No cache statistics: Hit/miss rates not exposed or logged in a structured way
+    
+    Completion Status
+    
+    Fully Implemented — Cache layer is functional. Missing invalidation trigger and monitoring are operational gaps.
+    
+    
+    
+    IMPLEMENTED FEATURES MASTER LIST
+    
+    Authentication
+    - User registration
+    - User login (JWT)
+    - Session management (localStorage token)
+    - Profile update (name/email)
+    - Password change
+    - Role-based access control (user/moderator/admin/ai_moderator/expert)
+    
+    FAQ Management
+    - FAQ creation (with AI embedding)
+    - FAQ update (with embedding regeneration)
+    - FAQ deletion
+    - FAQ listing (grouped by category)
+    - FAQ paginated listing
+    - FAQ detail view
+    - FAQ helpfulness voting
+    - FAQ AI match checking (for community post preview)
+    - FAQ status workflow (pending/approved/rejected)
+    
+    Community Forum
+    - Community post creation
+    - Community post listing (paginated)
+    - Community post detail
+    - Community post upvote (toggle)
+    - Community post deletion (admin/mod)
+    - Community post resolve (with official answer)
+    - Community post expert help request
+    - Comment creation
+    - Comment upvote (toggle)
+    - Comment downvote (toggle with auto-delete at -5)
+    - Comment verification (admin/mod)
+    - Comment expert answer flag
+    - Community post search (hybrid vector + text)
+    
+    Search
+    - Hybrid search (vector + keyword, RRF merged)
+    - Search suggest (public, FAQ only)
+    - Trending queries
+    - Search result caching (Redis + LRU)
+    - Search threshold filtering
+    
+    Admin Dashboard
+    - Stats overview (8 KPIs)
+    - FAQ growth chart
+    - User activity chart
+    - Category distribution chart
+    - Search keywords chart
+    - Resolution rate chart
+    - FAQ management (CRUD + approve/reject)
+    - Community post moderation
+    - User role management
+    - Admin activity feed
+    - Search insights
+    
+    Analytics
+    - Search analytics (popular queries, failed queries)
+    - FAQ growth over time
+    - Category breakdown
+    - User activity chart data
+    - Failed query tracking (7-day window)
+    
+    Notifications
+    - Notification creation (post_resolved, expert_request)
+    - Notification listing
+    - Unread count
+    - Mark as read (single)
+    - Mark all as read
+    - Notification deletion
+    - Notification settings (preferences)
+    
+    Infrastructure
+    - MongoDB connection (lazy singleton)
+    - Redis cache (Upstash, lazy singleton)
+    - JWT authentication middleware
+    - RBAC authorization middleware
+    - Rate limiting (global + admin)
+    - CORS configuration
+    - Helmet security headers
+    - Request ID middleware
+    - Sentry error tracking
+    - Morgan HTTP logging
+    - Custom logger utility
+    - Environment validation on startup
+    - Health check endpoint (/api/health)
+    - Warm-up endpoint (/api/warm)
+    - AI embedding pipeline (@xenova/transformers)
+    
+    Frontend UI Components
+    - Navbar, Footer, SearchBar, CategoryGrid, TopSolved, TrendingIssues, CTA
+    - FAQAccordion, CommunityPostCard, Avatar, Badge, Button, Card, Input, Spinner
+    - SearchResults, TrendingQueries, WordCloud, PageDoodles
+    - Admin charts (FAQGrowthChart, UserActivityChart, CategoryPieChart, SearchBarChart, ResolutionChart)
+    - Admin layout components (AdminLayout, AdminSidebar, AdminNavbar)
+    - StatsCard, ChartCard, SkeletonLoader, Modal
+    - AnimatePresence page transitions (framer-motion)
+    
+    
+    
+    PARTIALLY IMPLEMENTED FEATURES
+    
+    Notification System — comment_replied and mention types
+    
+    What exists: Notification types are defined in the schema and controller interface.
+    
+    What's missing: No code path creates a comment_replied or mention notification. When a user replies to a comment, no notification is sent to the original comment author. When a user mentions another user (e.g., @username in comment), no notification is created.
+    
+    Backend gap: addComment in communityController.ts does not create any notification. No mention parsing exists.
+    
+    
+    
+    Notification Settings — stored but never used
+    
+    What exists: NotificationSettings model, GET /notifications/settings, PATCH /notifications/settings endpoints, admin UI in AdminSettings.tsx.
+    
+    What's missing: The settings values are never read by any notification delivery code. No email, push, or in-app notification is gated by these preferences. The weekly report setting has no generation mechanism.
+    
+    Backend gap: notificationController.createNotification doesn't check NotificationSettings before creating. No background job or cron invokes notification generation.
+    
+    
+    
+    User Activity Chart — generates fake data
+    
+    What exists: AdminDashboard and AdminAnalytics both call GET /admin/user-activity-chart.
+    
+    What's missing: The users field in the response is generated by Math.floor(Math.random() * 20 + 5) — completely random data. There is no actual tracking of active users per day.
+    
+    Backend gap: getUserActivityChart in adminController.ts (lines 407-416) should aggregate actual user activity (e.g., unique users who searched or posted per day) but instead returns random numbers.
+    
+    
+    
+    Admin Reports — export buttons exist but don't download
+    
+    What exists: AdminReports.tsx has a "Export as CSV" button and format options.
+    
+    What's missing: The export button is likely wired to a download function but the actual file generation and download trigger is not present in the code seen. Even if the data is fetched, no Blob creation or <a download> trigger exists.
+    
+    Frontend gap: No actual file download implementation visible in the component.
+    
+    
+    
+    Activity Feed — no pagination
+    
+    What exists: GET /admin/activity-feed returns last 20 admin actions.
+    
+    What's missing: No pagination, no cursor-based access, no way to see older records beyond the first 20.
+    
+    Backend gap: getActivityFeed in adminController.ts has .limit(20) with no offset or page param.
+    
+    
+    
+    Cache Invalidation — function exists but never called
+    
+    What exists: invalidateCache() in utils/cache.ts.
+    
+    What's missing: No code path calls invalidateCache(). When a FAQ is created, updated, or deleted, the cache retains stale results until TTL expiry (1 hour).
+    
+    Backend gap: FAQ CRUD operations don't invalidate cache. Search results for the same query will remain stale for up to 1 hour after FAQ content changes.
+    
+    
+    
+    Community Post Edit — not implemented
+    
+    What exists: Post creation, deletion, resolve, upvote.
+    
+    What's missing: No endpoint to edit a post's title/body after creation.
+    
+    Backend gap: No PUT /community/:id route exists.
+    
+    
+    
+    Comment Edit/Delete by Author — not implemented
+    
+    What exists: Comment creation, upvote, downvote, verify, auto-delete at -5.
+    
+    What's missing: No endpoint for a user to edit or delete their own comment.
+    
+    Backend gap: No route for PUT /community/:id/comments/:commentId or DELETE /community/:id/comments/:commentId.
+    
+    
+    
+    Comment Reply Notification — not implemented
+    
+    What exists: comment_replied notification type defined.
+    
+    What's missing: When a user adds a comment, no notification is sent to the post author or previous commenters.
+    
+    Backend gap: addComment in communityController.ts doesn't create any notification.
+    
+    
+    
+    MISSING PRODUCTION FEATURES
+    
+    P0 Critical
+    
+    1. SearchLog has no database index — severe performance risk at scale
+    
+    searchLogSchema has no indexes. Every analytics query (popular queries, failed queries, trending, activity) does a full collection scan with $group. At 100K+ search logs, every admin page load will be slow.
+    
+    Recommended: Add compound index {createdAt: -1} and text index or hashed index on query for aggregation performance.
+    
+    
+    
+    2. Notification delivery mechanism is entirely absent
+    
+    Settings are stored, notification documents are created for some events, but no email, push, or in-app notification is actually delivered based on user preferences. Users have no way to receive urgent notifications like "your post was resolved" without polling.
+    
+    Recommended: Integrate a notification delivery system (e.g., email via SendGrid/Resend, or in-app polling with WebSocket for real-time).
+    
+    
+    
+    3. No cache invalidation on FAQ/community update
+    
+    Stale search results cached for up to 1 hour after content changes. A newly created FAQ won't appear in search results for up to 1 hour.
+    
+    Recommended: Call invalidateCache() from FAQ and community post CRUD operations.
+    
+    
+    
+    P1 Important
+    
+    4. No token refresh — sessions expire with no renewal
+    
+    JWT tokens are valid for 7 days with no refresh mechanism. If a token expires, the user must explicitly re-login. For an internal tool this is acceptable; for a production public-facing app this causes user experience issues.
+    
+    Recommended: Implement refresh token rotation or extend JWT expiry for active users.
+    
+    
+    
+    5. No rate limiting per account (only per IP)
+    
+    Global rate limiter is per-IP. A single user with a valid token can exhaust the 300 req/15min budget and affect other users on the same IP.
+    
+    Recommended: Implement per-user rate limiting using the authenticated user's ID.
+    
+    
+    
+    6. No duplicate question detection on FAQ creation
+    
+    Creating two FAQs with identical or very similar questions is possible. No similarity check is run before saving.
+    
+    Recommended: Run a vector search similarity check before FAQ creation; warn or block if similarity > 0.9.
+    
+    
+    
+    7. User activity chart uses fake data
+    
+    Admin dashboard shows completely random user counts in the activity chart, giving a false picture of system usage.
+    
+    Recommended: Track actual unique active users per day (e.g., users who made at least one search or post) and aggregate properly.
+    
+    
+    
+    8. No webhook/external integration for FAQ updates
+    
+    When a FAQ is created/updated/deleted, no external system is notified. For an LMS or knowledge base integration, downstream systems need to know when content changes.
+    
+    Recommended: Add optional webhook dispatch on FAQ CRUD events.
+    
+    
+    
+    9. No content moderation queue for community posts
+    
+    Community posts are created without any approval step. Inappropriate content can be posted and only deleted after the fact.
+    
+    Recommended: Add a pending/approved/rejected status workflow for community posts similar to FAQs.
+    
+    
+    
+    P2 Nice to Have
+    
+    10. Comment edit/delete by author
+    
+    Users cannot edit or delete their own comments. A badly worded comment or one with a typo can only be removed by moderator action or auto-deletion via downvotes.
+    
+    Recommended: Add PUT /community/:id/comments/:commentId and DELETE /community/:id/comments/:commentId endpoints with author-only authorization.
+    
+    
+    
+    11. No search result click tracking / relevance feedback
+    
+    Search results are logged but never validated against user behavior. You can't tell if a returned result was actually clicked or useful.
+    
+    Recommended: Add a POST /search/:resultId/click endpoint to log click events and build a feedback loop for search quality improvement.
+    
+    
+    
+    12. No "report post/comment" functionality
+    
+    Users have no way to flag inappropriate content for moderator attention without posting a public comment.
+    
+    Recommended: Add a POST /community/:id/report endpoint that creates a moderator-visible flag without exposing to public.
+    
+    
+    
+    13. No password reset / forgot password
+    
+    Users who forget their password cannot reset it. Only an admin can reset via direct DB update.
+    
+    Recommended: Add email-based password reset flow with time-limited tokens.
+    
+    
+    
+    14. Weekly report generation — settings exist but no cron
+    
+    NotificationSettings.weeklyReport is stored but no mechanism generates or sends weekly reports.
+    
+    Recommended: Add a cron job (cronjob skill) that runs weekly and generates a summary notification for users with weeklyReport: true.
+    
+    
+    
+    ARCHITECTURAL ISSUES
+    
+    Severity: HIGH
+    
+    Issue 1: SearchLog has no indexes — full collection scans on every admin query
+    
+    - Why it matters: Every admin analytics page load executes aggregation pipelines on SearchLog without any index support. At 100K+ records, these queries will take 5-10+ seconds, blocking the admin panel.
+    - Affected queries: getTrending, getSearchAnalytics, getFailedQueries, getSearchInsights, getUserActivityChart, getFaqGrowth
+    - Recommended solution: Add {createdAt: -1} index on SearchLog. For query text aggregations, a hashed index on query or a compound {query: 1, createdAt: -1} would speed up the $group stage.
+    
+    
+    
+    Issue 2: No cache invalidation — stale results for up to 1 hour
+    
+    - Why it matters: User searches may return outdated results after FAQ or community content changes. A newly added FAQ won't appear in search for 1 hour.
+    - Recommended solution: Call invalidateCache() from all FAQ and community post write operations (create, update, delete).
+    
+    
+    
+    Issue 3: Upstash Redis credentials stored in plain .env — git-tracked potentially
+    
+    - Why it matters: REDIS_URL and REDIS_TOKEN are in .env which may be committed to git history.
+    - Recommended solution: Use environment variables injected at deploy time (Vercel Environment Variables) rather than .env file.
+    
+    
+    
+    Severity: MEDIUM
+    
+    Issue 4: getUserActivityChart returns fake user count data
+    
+    - Why it matters: The admin dashboard displays a user activity chart that shows random numbers for the users metric, providing no actual insight into user engagement.
+    - Recommended solution: Track actual unique user activity per day in a separate collection or use an existing event log to aggregate.
+    
+    
+    
+    Issue 5: Two separate Admin implementations — confusing and duplicated
+    
+    - Why it matters: There's a legacy AdminPage.tsx (at /admin/old) and a new AdminLayout-based admin panel with separate pages. Both access the same API endpoints. The legacy page has its own analytics, FAQ, community, and user tabs. The new admin panel mirrors all of these with different UI.
+    - Recommended solution: Deprecate and remove the legacy /admin/old route and AdminPage.tsx. The new admin panel at /admin is comprehensive.
+    
+    
+    
+    Issue 6: Admin activity feed has no pagination — only 20 records
+    
+    - Why it matters: getActivityFeed returns only 20 most recent entries with no pagination. Audit trail is limited to recent activity.
+    - Recommended solution: Add pagination with ?page=&limit= to getActivityFeed.
+    
+    
+    
+    Issue 7: No hard delete cleanup for orphaned data
+    
+    - Why it matters: Deleting a user doesn't delete their posts, comments, or notifications. Deleted users' names will show as "Student" or "User" in UI due to population failing, but data remains in DB.
+    - Recommended solution: Add userId cascade delete or set author to null with a [deleted] placeholder on user deletion.
+    
+    
+    
+    Issue 8: Notification settings are stored but never read — dead preference system
+    
+    - Why it matters: Users configure notification preferences that have zero effect on what notifications they receive. The settings are completely inert.
+    - Recommended solution: Either remove the settings UI (simplifies) or implement a preference check before sending any notification.
+    
+    
+    
+    Severity: LOW
+    
+    Issue 9: No structured logging — console.log scattered
+    
+    - Why it matters: The logger utility exists but cache operations use console.log directly. Search operations have no structured logging. Makes debugging in production harder.
+    - Recommended solution: Use logger.info/warn/error consistently across all utilities.
+    
+    
+    
+    Issue 10: No health check for Redis in /api/health
+    
+    - Why it matters: /api/health only pings MongoDB. If Redis is down, the health check returns ok even though search caching is degraded. No way to know from health endpoint.
+    - Recommended solution: Add Redis ping to health check and include cache status in response.
+    
+    
+    
+    Issue 11: Moderate use of any type casting in community controller
+    
+    - Why it matters: (post.comments as any).id(req.params.commentId) bypasses TypeScript safety. If the Mongoose subdocument API changes, this silently breaks.
+    - Recommended solution: Use proper typed subdocument accessor or cast through a more specific type.
+    
+    
+    
+    PROJECT COMPLETION REPORT
+    
+    Backend Completion: 87%
+    
+    What exists: All core features fully implemented — auth, FAQ CRUD, community forum, hybrid search, admin analytics, notifications, caching, embeddings. ~40 custom backend files.
+    
+    What's missing:
+    - Cache invalidation on content update (-5%)
+    - Notification delivery mechanism (preferences unused) (-4%)
+    - Token refresh mechanism (-3%)
+    - Per-user rate limiting (-1%)
+    
+    Verdict: Production-ready for internal use. Missing features are refinements rather than structural gaps.
+    
+    
+    
+    Frontend Completion: 82%
+    
+    What exists: Full set of user pages (Home, FAQ, Community, Login, Register) and comprehensive admin panel (Dashboard, FAQs, Analytics, Users, Search, Reports, Settings, Community). Rich UI component library, dark-themed admin, charts.
+    
+    What's missing:
+    - Legacy /admin/old duplicate admin panel (-5%)
+    - Export download functionality in Reports (-3%)
+    - Activity feed pagination (-2%)
+    - Notification bell UI and real-time updates (-4%)
+    - User profile/account page (-2%)
+    - Comment edit/delete by author (-2%)
+    
+    Verdict: Solid production UI. Most gaps are peripheral features, not core flows.
+    
+    
+    
+    Infrastructure Completion: 78%
+    
+    What exists: MongoDB Atlas with vector search, Upstash Redis cache, Vercel deployment (backend + frontend), Sentry error tracking, environment validation, health/warm endpoints, rate limiting, CORS, helmet.
+    
+    What's missing:
+    - Cache invalidation pipeline (-7%)
+    - Redis health check integration (-5%)
+    - No CI/CD pipeline visible (-5%)
+    - No CDN configuration for static assets (-3%)
+    - Upstash credentials in .env rather than injected env vars (-2%)
+    
+    Verdict: Infrastructure covers the essentials. Missing observability around cache health and no invalidation automation.
+    
+    
+    
+    Admin System Completion: 79%
+    
+    What exists: Full admin panel with stats, charts, FAQ CRUD with approve/reject workflow, community moderation, user role management, search insights, activity feed, notification settings.
+    
+    What's missing:
+    - User activity chart uses fake data (-8%)
+    - Activity feed has no pagination (-4%)
+    - Notification settings have no effect (-4%)
+    - Export in reports not functional (-3%)
+    - Duplicate legacy admin page (-2%)
+    
+    Verdict: Admin panel is the strongest part of the project. Real gaps are in data accuracy (fake user counts) and notification settings being inert.
+    
+    
+    
+    Production Readiness: 75%
+    
+    Why not higher:
+    
+    1. SearchLog has no indexes — will fail catastrophically at scale
+    2. Notification delivery absent — users miss important updates
+    3. No cache invalidation — search results go stale
+    4. No per-user rate limiting — one user can Dos the system
+    5. Admin analytics use fake data — reporting is unreliable
+    6. No password reset — users locked out without admin intervention
+    7. No content moderation queue for community — inappropriate content can appear
+    
+    Stratified verdict:
+    - Internal tool / MVP: Ready at ~75%. Core flows work.
+    - Public-facing production: Not ready. Must fix search index, notification delivery, rate limiting, and content moderation first.

@@ -1,127 +1,132 @@
-# TypeScript Migration Progress — ⚠️ ARCHIVED
+# Implementation Progress — Yaksha FAQ Portal
 
-> All migration steps below are COMPLETE as of the current session. This file is kept for historical reference only. See `context.md` for the current project state.
+Last updated: 2026-01-XX
 
-## Status: IN PROGRESS — Step 7 partially complete
+## Status Overview
 
-Last updated: Step 7 (pages) — LoginPage, RegisterPage done. HomePage written. FAQPage, CommunityPage, AdminPage pending.
-
-## Files Migrated: 31 / 65
-
-### Step 1 ✅ — Utilities (2 files)
-- [x] `src/utils/api.js` → `src/utils/api.ts`
-- [x] `src/admin/utils/adminApi.js` → `src/admin/utils/adminApi.ts`
-
-### Step 2 ✅ — Hooks (2 files)
-- [x] `src/hooks/useAuth.jsx` → `src/hooks/useAuth.tsx`
-- [x] `src/admin/hooks/useAdminAuth.jsx` → `src/admin/hooks/useAdminAuth.tsx`
-
-### Step 3 ✅ — UI Components (12 files)
-- [x] `src/components/ui/SearchBar.jsx` → `SearchBar.tsx`
-- [x] `src/components/ui/SearchResults.jsx` → `SearchResults.tsx`
-- [x] `src/components/ui/WordCloud.jsx` → `WordCloud.tsx`
-- [x] `src/components/ui/TrendingQueries.jsx` → `TrendingQueries.tsx`
-- [x] `src/components/ui/TrendingIssues.jsx` → `TrendingIssues.tsx`
-- [x] `src/components/ui/TopSolved.jsx` → `TopSolved.tsx`
-- [x] `src/components/ui/CategoryGrid.jsx` → `CategoryGrid.tsx`
-- [x] `src/components/ui/CommunityPostCard.jsx` → `CommunityPostCard.tsx`
-- [x] `src/components/ui/FAQAccordion.jsx` → `FAQAccordion.tsx`
-- [x] `src/components/ui/CTA.jsx` → `CTA.tsx`
-- [x] `src/components/ui/PageDoodles.jsx` → `PageDoodles.tsx`
-- [x] `src/components/ui/RubberDuck.jsx` → `RubberDuck.tsx`
-
-### Step 4 ✅ — Layout Components (2 files)
-- [x] `src/components/layout/Navbar.jsx` → `Navbar.tsx`
-- [x] `src/components/layout/Footer.jsx` → `Footer.tsx`
-
-### Step 5 ✅ — Admin Components (9 files)
-- [x] `src/admin/components/common/Badge.jsx` → `Badge.tsx`
-- [x] `src/admin/components/common/Modal.jsx` → `Modal.tsx`
-- [x] `src/admin/components/common/SkeletonLoader.jsx` → `SkeletonLoader.tsx`
-- [x] `src/admin/components/cards/StatsCard.jsx` → `StatsCard.tsx`
-- [x] `src/admin/components/charts/CategoryPieChart.jsx` → `CategoryPieChart.tsx`
-- [x] `src/admin/components/charts/FAQGrowthChart.jsx` → `FAQGrowthChart.tsx`
-- [x] `src/admin/components/charts/ResolutionChart.jsx` → `ResolutionChart.tsx`
-- [x] `src/admin/components/charts/SearchBarChart.jsx` → `SearchBarChart.tsx`
-- [x] `src/admin/components/charts/UserActivityChart.jsx` → `UserActivityChart.tsx`
-
-### Step 6 ✅ — Admin Layouts (3 files)
-- [x] `src/admin/components/layout/AdminLayout.jsx` → `AdminLayout.tsx`
-- [x] `src/admin/components/layout/AdminNavbar.jsx` → `AdminNavbar.tsx`
-- [x] `src/admin/components/layout/AdminSidebar.jsx` → `AdminSidebar.tsx`
-
-### Step 7 🟡 — Pages (6 files, 4 remaining)
-- [x] `src/pages/LoginPage.jsx` → `LoginPage.tsx` ✅
-- [x] `src/pages/RegisterPage.jsx` → `RegisterPage.tsx` ✅
-- [x] `src/pages/HomePage.jsx` → `HomePage.tsx` ✅ (written, not yet deleted original)
-- [ ] `src/pages/FAQPage.jsx` → `FAQPage.tsx` — pending
-- [ ] `src/pages/CommunityPage.jsx` → `CommunityPage.tsx` — pending
-- [ ] `src/pages/AdminPage.jsx` → `AdminPage.tsx` — pending
-
-### Step 8 — Admin Pages (9 files)
-- [ ] `src/admin/pages/AdminLogin.jsx` → `AdminLogin.tsx`
-- [ ] `src/admin/pages/AdminDashboard.jsx` → `AdminDashboard.tsx`
-- [ ] `src/admin/pages/AdminFAQs.jsx` → `AdminFAQs.tsx`
-- [ ] `src/admin/pages/AdminAnalytics.jsx` → `AdminAnalytics.tsx`
-- [ ] `src/admin/pages/AdminUsers.jsx` → `AdminUsers.tsx`
-- [ ] `src/admin/pages/AdminSearch.jsx` → `AdminSearch.tsx`
-- [ ] `src/admin/pages/AdminReports.jsx` → `AdminReports.tsx`
-- [ ] `src/admin/pages/AdminSettings.jsx` → `AdminSettings.tsx`
-- [ ] `src/admin/pages/AdminCommunity.jsx` → `AdminCommunity.tsx`
-
-### Step 9 — Entry Points
-- [ ] `App.jsx` → `App.tsx`
-- [ ] `main.jsx` → `main.tsx`
-
-### Step 10 — Final Cleanup
-- Verify full build passes
-- Update `goal` tracker
+| # | Feature | Status |
+|---|---------|--------|
+| 1 | SearchLog database indexes | ✅ Completed |
+| 2 | Cache invalidation on FAQ/community write | ✅ Completed |
+| 3 | Comment reply notifications | ✅ Completed |
+| 4 | User activity chart with real data | ✅ Completed |
+| 5 | Admin activity feed pagination | ✅ Completed |
+| 6 | Remove legacy /admin/old route | ✅ Completed |
+| 7 | SearchLog seed script for demo data | ✅ Completed |
 
 ---
 
-## Types Created
+**Summary**: All 7 items completed. Backend and frontend build clean.
 
-### `src/types/ui.ts` (shared)
-```typescript
-interface Post { _id: string; title: string; body: string; status: string; author?: { name: string }; upvotes?: unknown[]; comments?: unknown[]; createdAt: string; updatedAt: string; answer?: string; category?: string }
-interface TrendingQuery { query: string; count?: number }
-interface FAQItem { _id: string; question: string; answer: string; category?: string }
-interface SearchResult { _id?: string; source: 'faq' | 'community'; question?: string; title?: string; answer?: string; body?: string; category?: string; vectorScore?: number; textScore?: number }
-interface Category { name: string; icon: ReactNode }
+---
+
+## 1. SearchLog Database Indexes
+
+**File**: `backend/scripts/addIndexes.js`
+**Severity**: P0 — blocks admin analytics at scale
+**Status**: ⏳ Pending
+
+### Issue
+SearchLog has no indexes. Every admin query (`getTrending`, `getSearchAnalytics`, `getFailedQueries`, etc.) does full collection scans with `$group`. At 100K+ records these will be catastrophic.
+
+### Fix
+Add compound index `{createdAt: -1}` and a hashed or indexed field for query aggregation.
+
+---
+
+## 2. Cache Invalidation on FAQ/Community Write
+
+**Files**: `backend/controllers/faqController.ts`, `backend/controllers/communityController.ts`
+**Severity**: P0 — stale search results persist up to 1 hour
+**Status**: ⏳ Pending
+
+### Issue
+`invalidateCache()` function exists in `utils/cache.ts` but is never called. When FAQ or community content changes, cached search results remain stale until TTL expiry.
+
+### Fix
+Call `invalidateCache()` from all FAQ and community post write operations (create, update, delete).
+
+---
+
+## 3. Comment Reply Notifications
+
+**File**: `backend/controllers/communityController.ts`
+**Severity**: P1 — notification type defined but never created
+**Status**: ⏳ Pending
+
+### Issue
+`addComment` in `communityController.ts` creates a comment subdocument but does not notify the post author or previous commenters. The notification type `comment_replied` exists in the schema but is never triggered.
+
+### Fix
+After a comment is added, create a notification for the post author. Optionally notify previous commenters who have `isExpertAnswer` comments.
+
+---
+
+## 4. User Activity Chart with Real Data
+
+**File**: `backend/controllers/adminController.ts` — `getUserActivityChart`
+**Severity**: P1 — admin dashboard shows fake random data
+**Status**: ⏳ Pending
+
+### Issue
+`getUserActivityChart` returns `users: Math.floor(Math.random() * 20 + 5)` — completely fabricated numbers with no relation to actual user activity.
+
+### Fix
+Track actual unique users per day by aggregating search logs (or a dedicated UserActivityLog). Replace random values with real aggregate counts.
+
+---
+
+## 5. Admin Activity Feed Pagination
+
+**File**: `backend/controllers/adminController.ts` — `getActivityFeed`
+**Severity**: P2 — only 20 most recent entries shown with no way to see older
+**Status**: ⏳ Pending
+
+### Issue
+`getActivityFeed` has `.limit(20)` with no pagination parameters. Audit trail is inaccessible beyond 20 entries.
+
+### Fix
+Add `?page=` and `?limit=` query params to `getActivityFeed`. Return `{logs, total, page, pages}`.
+
+---
+
+## 6. Remove Legacy /admin/old Route
+
+**File**: `frontend/src/App.tsx`
+**Severity**: P2 — duplicate admin panel creates confusion
+**Status**: ⏳ Pending
+
+### Issue
+Legacy `AdminPage.tsx` at route `/admin/old` and the new `AdminLayout`-based admin panel at `/admin` both exist, sharing the same API endpoints with different UIs. Duplicate code maintenance burden.
+
+### Fix
+Remove the `/admin/old` route from `App.tsx` and remove the `AdminPage.tsx` file.
+
+---
+
+## 7. SearchLog Seed Script
+
+**File**: `backend/scripts/seedSearchLogs.js`
+**Severity**: P2 — no demo data to test analytics
+**Status**: ✅ **COMPLETED**
+
+### What was fixed
+Created `scripts/seedSearchLogs.js` to generate realistic search log data for testing admin analytics.
+
+**Usage**:
+```bash
+node scripts/seedSearchLogs.js                          # 200 entries, 14 days, 15% fail rate
+node scripts/seedSearchLogs.js --count 500 --days 30     # 500 entries, 30 days
+node scripts/seedSearchLogs.js --fail-rate 0.2 --clear   # 20% fail rate, clear existing first
 ```
 
-### Per-file types
-- `BadgeVariant` — 'approved' | 'pending' | 'rejected' | 'admin' | 'user' | 'moderator' | 'default'
-- `ModalProps` — { open, onClose, title?, children, maxWidth? }
-- `SkeletonProps` — className?, style?
-- `CardTheme` — 'purple' | 'blue' | 'cyan' | 'green' | 'amber' | 'red'
-- `IconProps` — { size: number }
-- Chart data interfaces: `CategoryData`, `FAQGrowthData`, `SearchTermData`, `UserActivityData`
-- `SearchDropdownProps` — for FAQPage sub-component
-- `QuestionListProps`, `QuestionDetailProps`, `CategoryCardProps`, `CategoryPillsProps`
-- `PostDetailDialogProps`, `CreatePostDialogProps` — for CommunityPage
+**Features**:
+- Weighted query pool with realistic internship-related queries
+- Configurable entry count, time window (days), and fail rate
+- 30% of results tagged as community source, 70% FAQ
+- Failed queries (resultsCount=0) for testing failed query analytics
+- Timestamps spread randomly over the configured time window
+- Chunked insertion (1000 per batch) for performance
+- `--clear` flag to wipe existing logs before seeding
 
----
-
-## Known Non-Obvious Changes
-
-1. **SearchBar.tsx** — switch from `api.post()` to native `fetch()` in the inline search handler. Uses `/api/search` with raw fetch to avoid circular dep (api.ts was being migrated).
-2. **HomePage.tsx** — `SearchBar` ref typed as `React.Ref<HTMLInputElement>` (forwardRef pattern)
-3. **AdminNavbar.tsx** — `useLocation()` imported (was missing in JS original)
-4. **AdminSidebar.tsx** — `SidebarContent` extracted as inner component with `onMobileClose: () => void` prop
-5. **StatsCard.tsx** — icon typed as `React.ComponentType<IconProps>` for `<Icon size={16} />` call
-6. **FAQPage.tsx** — `CategoryPills`, `CategoryGrid`, `QuestionList`, `QuestionDetail`, `SearchDropdown` all converted as local sub-components with full props interfaces
-7. **CommunityPage.tsx** — `PostDetailDialog` and `CreatePostDialog` converted with proper `useRef<HTMLDialogElement>` typing
-8. **HomePage.tsx** — `ResultItem`, `ConfidenceTag` extracted as typed local function components
-9. **All pages** — `FormEvent`, `ChangeEvent<HTMLInputElement>` on form handlers; axios errors typed as `{ response?: { data?: { message?: string } } }`
-
----
-
-## Build Status
-- ✅ Frontend build passes (last verified after Step 7 partial — LoginPage + RegisterPage)
-- Build command: `npm run build` in `frontend/`
-
----
-
-## Backend (not yet migrated)
-Backend remains pure JS — Phase 3 will handle it. Currently: `backend/` package has tsconfig.json and tsx installed, but no .ts files yet.
+**Verified**: Script runs successfully, inserted 200 entries with 35 failed queries.

@@ -7,7 +7,6 @@ import RegisterPage from './pages/RegisterPage';
 import HomePage from './pages/HomePage';
 import FAQPage from './pages/FAQPage';
 import CommunityPage from './pages/CommunityPage';
-import AdminPage from './pages/AdminPage';
 import Spinner from './components/ui/Spinner';
 // Admin pages
 import AdminLogin from './admin/pages/AdminLogin';
@@ -91,7 +90,6 @@ function AppRoutes() {
       <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
       <Route path="/faq" element={<ProtectedRoute><FAQPage /></ProtectedRoute>} />
       <Route path="/community" element={<ProtectedRoute><CommunityPage /></ProtectedRoute>} />
-      <Route path="/admin/old" element={<AdminRoute><AdminPage /></AdminRoute>} />
 
       {/* Admin Panel dedicated routes (guarded by AdminRoute) */}
       <Route path="/admin/login" element={<AdminLogin />} />
