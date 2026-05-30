@@ -410,3 +410,14 @@ select option {
   color: #3D5E3D;
 }
 
+/* Float-away animation for duplicate rejection */
+@keyframes float-away {
+  0%   { transform: translateY(0) scale(1); opacity: 1; }
+  40%  { transform: translateY(-8px) scale(1.02); opacity: 0.7; }
+  100% { transform: translateY(-24px) scale(0.97); opacity: 0; }
+}
+
+.animate-float-away {
+  animation: float-away 0.7s ease-out forwards;
+}
+

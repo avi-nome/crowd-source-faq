@@ -120,6 +120,14 @@ const userSchema = new MongooseSchema<IUser>(
     suspendedUntil: { type: Date },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date },
+
+    // Zoom OAuth (per-user)
+    zoomConnected:    { type: Boolean, default: false },
+    zoomUserId:       { type: String },
+    zoomAccessToken:  { type: String },
+    zoomRefreshToken: { type: String },
+    zoomTokenExpiry:  { type: Date },
+    zoomConnectedAt:  { type: Date },
   },
   { timestamps: true }
 );

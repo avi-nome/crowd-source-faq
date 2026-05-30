@@ -55,8 +55,9 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
 async function processRecordingEvent(payload: ZoomWebhookPayload): Promise<void> {
   const obj = payload.payload?.object ?? {};
 
-  const zoomUserId = String(obj.host_id ?? '');
-  const zoomMeetingId = String(obj.id ?? '');
+  const zoomUserId   = String(obj.host_id    ?? '');
+  const zoomEmail    = String(obj.host_email ?? '').toLowerCase().trim();
+  const zoomMeetingId = String(obj.id        ?? '');
   const topic = String(obj.topic ?? 'Untitled Meeting').trim();
 
   // ── Privacy: skip blacklisted meetings ──────────────────────────────────
@@ -65,10 +66,18 @@ async function processRecordingEvent(payload: ZoomWebhookPayload): Promise<void>
     return;
   }
 
-  // ── Find our user by their Zoom user ID ───────────────────────────────
-  const user = await User.findOne({ zoomUserId, zoomConnected: true });
+  // ── Find our user by Zoom user ID OR host email ────────────────────────
+  // (host_email fallback handles the case where zoomUserId wasn't captured at OAuth time)
+  let user = zoomUserId
+    ? await User.findOne({ zoomUserId, zoomConnected: true })
+    : null;
+
+  if (!user && zoomEmail) {
+    user = await User.findOne({ email: zoomEmail, zoomConnected: true });
+  }
+
   if (!user) {
-    logger.warn(`[Zoom] No connected user found for Zoom user ID: ${zoomUserId}`);
+    logger.warn(`[Zoom] No connected user found for Zoom user ID: ${zoomUserId} / email: ${zoomEmail}`);
     return;
   }
 
@@ -279,6 +288,7 @@ interface ZoomWebhookPayload {
       start_time?: string;
       duration?: number;
       host_id?: string;       // Zoom user ID — key for per-user lookup
+      host_email?: string;    // Zoom host email — fallback lookup
       recording_files?: RecordingFile[];
     };
   };

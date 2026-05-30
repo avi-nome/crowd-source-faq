@@ -20,11 +20,13 @@ const CLIENT_ID     = process.env.ZOOM_CLIENT_ID     ?? '';
 const CLIENT_SECRET = process.env.ZOOM_CLIENT_SECRET ?? '';
 const REDIRECT_URI  = process.env.ZOOM_REDIRECT_URI   ?? 'http://localhost:6767/api/zoom/auth/callback';
 
-if (!CLIENT_ID || !CLIENT_SECRET) {
-  throw new Error('Missing ZOOM_CLIENT_ID or ZOOM_CLIENT_SECRET env vars');
-}
+// Lazy getters — read process.env directly (avoids module-level capture timing issues)
+// Only validate when first called, after dotenv has loaded all env files
+function getClientId()     { const v = process.env.ZOOM_CLIENT_ID;     if (!v) throw new Error('Missing ZOOM_CLIENT_ID env var — add it to backend/.env.local');     return v; }
+function getClientSecret() { const v = process.env.ZOOM_CLIENT_SECRET; if (!v) throw new Error('Missing ZOOM_CLIENT_SECRET env var — add it to backend/.env.local'); return v; }
+function getRedirectUri()  { return process.env.ZOOM_REDIRECT_URI ?? 'http://localhost:6767/api/zoom/auth/callback'; }
 
-// ─── Authorization URL ────────────────────────────────────────────────────────
+// Fallback: if this fails, leave zoomUserId blank — can be fetched on first webhook
 
 /**
  * Build the Zoom OAuth authorization URL for a given user.
@@ -33,8 +35,8 @@ if (!CLIENT_ID || !CLIENT_SECRET) {
 export function buildZoomAuthUrl(internalUserId: string): string {
   const params = new URLSearchParams({
     response_type: 'code',
-    client_id: CLIENT_ID,
-    redirect_uri: REDIRECT_URI,
+    client_id: getClientId(),
+    redirect_uri: getRedirectUri(),
     state: Buffer.from(internalUserId).toString('base64'), // encode user ID in state
   });
   return `${ZOOM_AUTH_URL}?${params}`;
@@ -54,9 +56,9 @@ interface ZoomTokens {
  * Exchange an authorization code for Zoom tokens.
  */
 export async function exchangeCodeForTokens(code: string): Promise<ZoomTokens> {
-  const credentials = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
+  const credentials = Buffer.from(`${getClientId()}:${getClientSecret()}`).toString('base64');
 
-  const res = await fetch(`${ZOOM_TOKEN_URL}?grant_type=authorization_code&code=${code}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`, {
+  const res = await fetch(`${ZOOM_TOKEN_URL}?grant_type=authorization_code&code=${code}&redirect_uri=${encodeURIComponent(getRedirectUri())}`, {
     method: 'POST',
     headers: {
       Authorization: `Basic ${credentials}`,
@@ -76,7 +78,7 @@ export async function exchangeCodeForTokens(code: string): Promise<ZoomTokens> {
  * Refresh a user's Zoom tokens using their stored refresh token.
  */
 export async function refreshZoomTokens(refreshToken: string): Promise<ZoomTokens> {
-  const credentials = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
+  const credentials = Buffer.from(`${getClientId()}:${getClientSecret()}`).toString('base64');
 
   const res = await fetch(`${ZOOM_TOKEN_URL}?grant_type=refresh_token&refresh_token=${refreshToken}`, {
     method: 'POST',
@@ -128,17 +130,30 @@ export async function getUserZoomToken(userId: string): Promise<string> {
 
 /**
  * Fetch the Zoom user's own ID (used to link webhook events to our user).
+ * We use /users?page_size=1 — requires recording:read scope (which we already have).
+ * The 'me' alias (GET /users/me) requires user:read scope which may not be granted.
  */
 export async function getZoomUserId(accessToken: string): Promise<string> {
-  const res = await fetch(`${ZOOM_API_BASE}/users/me`, {
+  // Try /users/me first (works if user:read scope is granted)
+  let res = await fetch(`${ZOOM_API_BASE}/users/me`, {
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
   });
-  if (!res.ok) throw new Error(`Failed to get Zoom user info (${res.status})`);
-  const data = (await res.json()) as { id: string };
-  return data.id;
-}
 
-// ─── API helpers (using user's token) ─────────────────────────────────────────
+  // Fallback: list users — first user in the list is the connected account's owner
+  if (!res.ok) {
+    res = await fetch(`${ZOOM_API_BASE}/users?page_size=1`, {
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (!res.ok) throw new Error(`Failed to get Zoom user info (${res.status})`);
+  const data = await res.json() as { id?: string; users?: { id: string }[] };
+
+  // Return id from /users/me or first user from list
+  const zoomUserId = data.id ?? data.users?.[0]?.id;
+  if (!zoomUserId) throw new Error('Could not extract Zoom user ID from response');
+  return zoomUserId;
+}
 
 /**
  * Make an authenticated Zoom API call using a user's stored token.

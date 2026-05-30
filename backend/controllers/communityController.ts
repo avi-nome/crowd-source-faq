@@ -136,6 +136,19 @@ export const createPost = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
+    // ── Server-side duplicate check ──────────────────────────────────────────
+    const words = title.trim().split(' ').filter((w) => w.length >= 3);
+    const isShortQuery = words.length < 3;
+    const matches = await checkDuplicate(title, isShortQuery);
+    if (matches.length > 0) {
+      res.status(409).json({
+        message: 'This question has already been asked by the universe. Try searching first.',
+        matches,
+        isDuplicate: true,
+      });
+      return;
+    }
+
     // Generate vector embedding for semantic search
     let embedding: number[] | undefined;
     try {
@@ -561,3 +574,196 @@ export const reportPost = async (req: Request<{ id: string }, {}, { reason: stri
     res.status(500).json({ message: 'Server error', error: (error as Error).message });
   }
 };
+
+// ─── Duplicate Detection ──────────────────────────────────────────────────────
+
+const DUPLICATE_VECTOR_THRESHOLD = 0.78;
+const DUPLICATE_TEXT_THRESHOLD = 0.35;
+const DUPLICATE_SHORT_QUERY_THRESHOLD = 0.88; // higher bar for <3-word queries
+
+export interface DuplicateMatch {
+  _id: string;
+  title: string;
+  question?: string;
+  answer?: string;
+  body?: string;
+  score: number;
+  source: 'faq' | 'community';
+  matchType: 'vector' | 'text';
+}
+
+/**
+ * Hybrid duplicate check against FAQs and community posts.
+ * Uses semantic similarity (vector) + keyword text matching.
+ */
+export async function checkDuplicate(
+  query: string,
+  isShortQuery: boolean
+): Promise<DuplicateMatch[]> {
+  const matches: DuplicateMatch[] = [];
+  const lower = query.toLowerCase().trim();
+
+  // ── 1. FAQ vector + keyword search ─────────────────────────────────────────
+  try {
+    const { generateEmbedding } = await import('../utils/embeddings.js');
+    const { default: FAQ } = await import('../models/FAQ.js');
+
+    const queryEmbedding = await generateEmbedding(query).catch(() => null);
+    if (!queryEmbedding) throw new Error('Embedding generation failed');
+
+    const vectorThreshold = isShortQuery ? DUPLICATE_SHORT_QUERY_THRESHOLD : DUPLICATE_VECTOR_THRESHOLD;
+
+    // Run vector + text search in parallel
+    const [vectorResults, textResults] = await Promise.all([
+      FAQ.find({
+        embedding: { $exists: true, $ne: null },
+        status: 'approved',
+      })
+        .select('_id question answer category embedding')
+        .lean()
+        .then(async (faqs) => {
+          // Compute cosine similarity in JS using dot product of normalized vectors
+          const scored = faqs
+            .map((f) => {
+              const dot =
+                f.embedding!.reduce((s: number, v: number, i: number) => s + v * queryEmbedding[i], 0);
+              return { faq: f, similarity: dot };
+            })
+            .filter((x) => x.similarity >= vectorThreshold)
+            .sort((a, b) => b.similarity - a.similarity)
+            .slice(0, 5);
+          return scored.map((x) => ({
+            _id: (x.faq._id as unknown as Types.ObjectId).toString(),
+            title: x.faq.question,
+            question: x.faq.question,
+            answer: x.faq.answer,
+            category: x.faq.category,
+            score: x.similarity,
+            matchType: 'vector' as const,
+          }));
+        }),
+
+      FAQ.find({
+        status: 'approved',
+        $or: [
+          { question: { $regex: escapeRegex(lower), $options: 'i' } },
+          { answer: { $regex: escapeRegex(lower), $options: 'i' } },
+        ],
+      })
+        .select('_id question answer category')
+        .lean()
+        .then((faqs) => {
+          const scored = faqs
+            .map((f) => {
+              const qlen = lower.split(' ').filter(Boolean).length;
+              const qlenNorm = qlen / Math.max(1, lower.length);
+              const qScore = Math.min(1, qlenNorm * 8);
+              return { faq: f, score: qScore };
+            })
+            .filter((x) => x.score >= DUPLICATE_TEXT_THRESHOLD)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 3);
+          return scored.map((x) => ({
+            _id: (x.faq._id as unknown as Types.ObjectId).toString(),
+            title: x.faq.question,
+            question: x.faq.question,
+            answer: x.faq.answer,
+            category: x.faq.category,
+            score: x.score,
+            matchType: 'text' as const,
+          }));
+        }),
+    ]);
+
+    const seenFaq = new Set<string>();
+    for (const r of [...vectorResults, ...textResults]) {
+      if (!seenFaq.has(r._id)) {
+        seenFaq.add(r._id);
+        matches.push({ ...r, source: 'faq' });
+      }
+    }
+  } catch (err) {
+    console.warn('FAQ duplicate check failed:', (err as Error).message);
+  }
+
+  // ── 2. Community post keyword search (title match) ──────────────────────────
+  try {
+    const { default: CommunityPost } = await import('../models/CommunityPost.js');
+
+    const words = lower.split(' ').filter((w) => w.length >= 3);
+    if (words.length > 0) {
+      const textResults = await CommunityPost.find({
+        $or: [
+          { title: { $regex: escapeRegex(lower), $options: 'i' } },
+          ...words.map((w) => ({ title: { $regex: `\\b${escapeRegex(w)}\\b`, $options: 'i' } })),
+        ],
+      })
+        .select('_id title body status')
+        .lean()
+        .then((posts) => {
+          const scored = posts
+            .map((p) => {
+              const tLower = p.title.toLowerCase();
+              let matchWords = 0;
+              for (const w of words) {
+                if (tLower.includes(w)) matchWords++;
+              }
+              const score = words.length > 0 ? matchWords / words.length : 0;
+              return { post: p, score };
+            })
+            .filter((x) => x.score >= DUPLICATE_TEXT_THRESHOLD)
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 3);
+          return scored.map((x) => ({
+            _id: (x.post._id as unknown as Types.ObjectId).toString(),
+            title: x.post.title,
+            body: x.post.body,
+            status: x.post.status,
+            score: x.score,
+            matchType: 'text' as const,
+          }));
+        });
+
+      const seenComm = new Set<string>();
+      for (const r of textResults) {
+        if (!seenComm.has(r._id)) {
+          seenComm.add(r._id);
+          matches.push({ ...r, source: 'community' });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Community duplicate check failed:', (err as Error).message);
+  }
+
+  // Sort by score descending, deduplicate
+  return matches.sort((a, b) => b.score - a.score).slice(0, 5);
+}
+
+// POST /api/community/check-duplicate
+export const checkDuplicateController = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { query } = req.body as { query?: string };
+    if (!query?.trim()) {
+      res.json({ isDuplicate: false, matches: [] });
+      return;
+    }
+
+    const words = query.trim().split(' ').filter((w) => w.length >= 3);
+    const isShortQuery = words.length < 3;
+
+    const matches = await checkDuplicate(query, isShortQuery);
+
+    res.json({
+      isDuplicate: matches.length > 0,
+      matches,
+      matchCount: matches.length,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Duplicate check failed', error: (error as Error).message });
+  }
+};
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

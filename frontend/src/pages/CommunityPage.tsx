@@ -490,9 +490,10 @@ function CreatePostDialog({ onClose, onCreated }: CreatePostDialogProps) {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [faqMatch, setFaqMatch] = useState<{ question: string } | null>(null);
-  const [faqCheckLoading, setFaqCheckLoading] = useState(false);
-  const faqCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [duplicateMatch, setDuplicateMatch] = useState<{ isDuplicate: boolean; matches: any[] } | null>(null);
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+  const [floatAway, setFloatAway] = useState(false);
+  const duplicateCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Save draft on field changes
   const handleTitleChange = (val: string) => {
@@ -531,26 +532,25 @@ function CreatePostDialog({ onClose, onCreated }: CreatePostDialogProps) {
   }, [onClose]);
 
   useEffect(() => {
-    if (faqCheckTimerRef.current) clearTimeout(faqCheckTimerRef.current);
+    if (duplicateCheckTimerRef.current) clearTimeout(duplicateCheckTimerRef.current);
     const q = title.trim();
     if (q.length < 10) {
-      setFaqMatch(null);
-      setFaqCheckLoading(false);
+      setDuplicateMatch(null);
+      setCheckingDuplicates(false);
       return;
     }
-    setFaqCheckLoading(true);
-    faqCheckTimerRef.current = setTimeout(async () => {
+    setCheckingDuplicates(true);
+    duplicateCheckTimerRef.current = setTimeout(async () => {
       try {
-        const res = await api.post<{ matched?: boolean; faq?: { question: string } }>('/faq/check-match', { query: q });
-        setFaqMatch(res.data.matched ? res.data.faq : null);
-      } catch (e) {
-        console.error('FAQ match check failed:', e);
-        setFaqMatch(null);
+        const res = await api.post<{ isDuplicate: boolean; matches: any[] }>('/community/check-duplicate', { query: q });
+        setDuplicateMatch(res.data);
+      } catch {
+        setDuplicateMatch(null);
       } finally {
-        setFaqCheckLoading(false);
+        setCheckingDuplicates(false);
       }
-    }, 500);
-    return () => { if (faqCheckTimerRef.current) clearTimeout(faqCheckTimerRef.current); };
+    }, 600);
+    return () => { if (duplicateCheckTimerRef.current) clearTimeout(duplicateCheckTimerRef.current); };
   }, [title]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -560,7 +560,7 @@ function CreatePostDialog({ onClose, onCreated }: CreatePostDialogProps) {
       setError('Both title and description are required.');
       return;
     }
-    if (faqMatch) {
+    if (duplicateMatch) {
       setError('This question is already answered in our FAQ. Please check the FAQ page first.');
       return;
     }
@@ -579,14 +579,14 @@ function CreatePostDialog({ onClose, onCreated }: CreatePostDialogProps) {
     }
   };
 
-  const isSubmitDisabled = !title.trim() || !body.trim() || !!faqMatch || faqCheckLoading;
+  const isSubmitDisabled = !title.trim() || !body.trim() || !!duplicateMatch || checkingDuplicates;
 
   return (
     <dialog
       ref={dialogRef}
       closedby="any"
       aria-labelledby="create-post-title"
-      className="m-auto w-full max-w-lg rounded-2xl border border-border shadow-2xl bg-card p-0 backdrop:bg-ink/30 backdrop:backdrop-blur-sm"
+      className={`m-auto w-full max-w-lg rounded-2xl border border-border shadow-2xl bg-card p-0 backdrop:bg-ink/30 backdrop:backdrop-blur-sm transition-all duration-300${floatAway ? " opacity-60 scale-[0.98]" : ""}`}
     >
       <div className="p-6">
         <div className="flex items-center justify-between mb-5">
@@ -605,7 +605,7 @@ function CreatePostDialog({ onClose, onCreated }: CreatePostDialogProps) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className={`space-y-4${floatAway ? ' animate-float-away' : ''}`}>
           <div>
             <label htmlFor="post-title" className="block text-xs font-medium text-ink-soft mb-1.5">
               Title <span className="text-danger">*</span>
@@ -622,10 +622,10 @@ function CreatePostDialog({ onClose, onCreated }: CreatePostDialogProps) {
             />
             <div className="flex items-center justify-between mt-1">
               <div>
-                {faqCheckLoading && (
+                {checkingDuplicates && (
                   <span className="text-xs text-ink-faint flex items-center gap-1">
                     <span className="w-3 h-3 border border-accent/30 border-t-accent rounded-full animate-spin inline-block" />
-                    Checking FAQ...
+                    Checking duplicates...
                   </span>
                 )}
               </div>
@@ -633,13 +633,13 @@ function CreatePostDialog({ onClose, onCreated }: CreatePostDialogProps) {
             </div>
           </div>
 
-          {faqMatch && (
+          {duplicateMatch && (
             <div className="faq-match-banner">
               <span>📖</span>
               <div>
                 <p className="font-medium">This question is already answered in our FAQ!</p>
                 <p className="text-xs mt-0.5 opacity-80">
-                  <strong>"{faqMatch.question}"</strong>
+                  <strong>"{duplicateMatch.question}"</strong>
                 </p>
                 <a href="/faq" className="text-xs mt-1 inline-block">→ Go to FAQ page</a>
               </div>

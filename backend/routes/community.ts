@@ -14,6 +14,7 @@ import {
   getAnswersList,
   requestExpertHelp,
   reportPost,
+  checkDuplicateController,
 } from '../controllers/communityController.js';
 import { searchCommunityPosts } from '../controllers/communitySearchController.js';
 import { protect, authorize } from '../middleware/auth.js';
@@ -25,6 +26,7 @@ router.get('/solved', getSolvedPosts); // public endpoint for "Top Solved Today"
 router.get('/answers/list', protect, getAnswersList); // paginated expert answers feed
 
 router.get('/', protect, getAllPosts);
+router.post('/check-duplicate', protect, checkDuplicateController);
 router.get('/:id', protect, getPostById);
 router.post('/', protect, createPost);
 router.post('/:id/upvote', protect, toggleUpvote);

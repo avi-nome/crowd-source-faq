@@ -2,6 +2,11 @@ import { Router } from 'express';
 import { protect } from '../middleware/auth.js';
 import { adminOnly } from '../middleware/admin.js';
 import {
+  semanticSearch,
+  getTrending,
+  getSuggest,
+} from '../controllers/searchController.js';
+import {
   submitUnresolved,
   getUnresolvedSearches,
   resolveUnresolved,
@@ -10,16 +15,20 @@ import {
 
 const router = Router();
 
-// Public: submit "No, I need more help" feedback (protect to capture userId)
-router.post('/unresolved', protect, submitUnresolved);
+// ── Public search ──────────────────────────────────────────────────────────
+router.get('/trending', getTrending);
+router.get('/suggest',  getSuggest);
 
-// Admin: list unresolved searches
-router.get('/unresolved-list', adminOnly, getUnresolvedSearches);
+// ── Semantic search ─────────────────────────────────────────────────────────
+router.post('/', protect, semanticSearch);
 
-// Admin: resolve an entry
-router.patch('/unresolved-search/:id/resolve', adminOnly, resolveUnresolved);
+// ── Unresolved feedback ─────────────────────────────────────────────────────
+// POST: capture "not resolved" search feedback (auth optional — uses token if present)
+router.post('/unresolved', submitUnresolved);
 
-// Admin: stats
-router.get('/unresolved-stats', adminOnly, getUnresolvedStats);
+// ── Admin: unresolved search management ────────────────────────────────────
+router.get('/unresolved-list',         adminOnly, getUnresolvedSearches);
+router.patch('/unresolved/:id/resolve', adminOnly, resolveUnresolved);
+router.get('/unresolved-stats',        adminOnly, getUnresolvedStats);
 
 export default router;

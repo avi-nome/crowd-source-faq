@@ -18,6 +18,11 @@ import {
   getCommunityPosts,
   deleteCommunityPost,
 } from '../controllers/adminController';
+import {
+  getUnresolvedSearches,
+  resolveUnresolved,
+  getUnresolvedStats,
+} from '../controllers/unresolvedSearchController';
 
 const router = Router();
 
@@ -33,6 +38,11 @@ router.get('/reports', getReports);
 router.get('/activity-feed', getActivityFeed);
 router.get('/user-activity-chart', getUserActivityChart);
 router.get('/community/posts', getCommunityPosts);
+
+// Unresolved search management
+router.get('/search/unresolved-list',         getUnresolvedSearches);
+router.get('/search/unresolved-stats',        getUnresolvedStats);
+router.patch('/search/unresolved/:id/resolve', resolveUnresolved);
 
 router.post('/faq', createFAQ);
 router.post('/faq/approve', approveFAQ);

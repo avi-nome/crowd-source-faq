@@ -22,8 +22,9 @@ import { logger } from './utils/logger.js';
 import * as Sentry from '@sentry/node';
 import { expressIntegration } from '@sentry/node';
 
-// Load environment variables (.env)
+// Load environment variables (.env + .env.local overrides)
 dotenv.config();
+dotenv.config({ path: '.env.local' });
 
 // Initialize Sentry
 Sentry.init({
@@ -218,13 +219,13 @@ function validateEnv(): void {
     }
   }
 
-  // Optional: Zoom OAuth
-  const zoomClientId = process.env.ZOOM_CLIENT_ID;
+  // Optional: Zoom OAuth (lazy — only validated when Zoom routes are first used)
+  const zoomClientId     = process.env.ZOOM_CLIENT_ID;
   const zoomClientSecret = process.env.ZOOM_CLIENT_SECRET;
-  if (zoomClientId !== undefined && !zoomClientSecret) {
+  if (zoomClientId !== undefined && zoomClientSecret === undefined) {
     errors.push('ZOOM_CLIENT_SECRET is required when ZOOM_CLIENT_ID is provided');
   }
-  if (zoomClientSecret !== undefined && !zoomClientId) {
+  if (zoomClientSecret !== undefined && zoomClientId === undefined) {
     errors.push('ZOOM_CLIENT_ID is required when ZOOM_CLIENT_SECRET is provided');
   }
   const redirectUri = process.env.ZOOM_REDIRECT_URI;

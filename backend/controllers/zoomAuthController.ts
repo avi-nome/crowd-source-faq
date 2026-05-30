@@ -69,19 +69,25 @@ export async function callbackZoom(req: Request, res: Response): Promise<void> {
     const tokens = await exchangeCodeForTokens(code);
 
     // Get the user's Zoom ID (used to route webhook events)
-    const zoomUserId = await getZoomUserId(tokens.access_token);
+    // Fallback: if this fails, leave zoomUserId blank — can be fetched on first webhook
+    let zoomUserId: string | undefined;
+    try {
+      zoomUserId = await getZoomUserId(tokens.access_token);
+    } catch (userErr) {
+      logger.warn(`[Zoom OAuth] Could not fetch Zoom user ID — will be resolved on first webhook: ${userErr instanceof Error ? userErr.message : userErr}`);
+    }
 
     // Store tokens in user document
-    await User.findByIdAndUpdate(userId, {
+    const updated = await User.findByIdAndUpdate(userId, {
       zoomConnected:     true,
-      zoomUserId,
+      zoomUserId:        zoomUserId ?? null,
       zoomAccessToken:   tokens.access_token,
       zoomRefreshToken:  tokens.refresh_token,
       zoomTokenExpiry:   new Date(Date.now() + tokens.expires_in * 1000),
       zoomConnectedAt:   new Date(),
-    });
+    }, { new: true });
 
-    logger.info(`[Zoom OAuth] User ${userId} connected Zoom account ${zoomUserId}`);
+    logger.info(`[Zoom OAuth] User ${userId} connected — updated doc: zoomConnected=${updated?.zoomConnected}, zoomUserId=${updated?.zoomUserId}`);
 
     // Redirect back to frontend success page
     res.redirect(`${process.env.CLIENT_URL ?? 'http://localhost:5173'}/account?zoom_connected=1`);
@@ -106,13 +112,13 @@ export async function disconnectZoom(req: Request, res: Response): Promise<void>
   }
 
   await User.findByIdAndUpdate(userId, {
-    zoomConnected:    false,
-    zoomUserId:       undefined,
-    zoomAccessToken:  undefined,
-    zoomRefreshToken: undefined,
-    zoomTokenExpiry:  undefined,
-    zoomConnectedAt:  undefined,
-  });
+        zoomConnected:    false,
+        zoomUserId:       null,
+        zoomAccessToken:  null,
+        zoomRefreshToken: null,
+        zoomTokenExpiry:  null,
+        zoomConnectedAt:  null,
+      });
 
   logger.info(`[Zoom OAuth] User ${userId} disconnected Zoom`);
   res.json({ message: 'Zoom account disconnected' });
@@ -131,7 +137,8 @@ export async function zoomStatus(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const user = await User.findById(userId).select('zoomConnected zoomConnectedAt zoomUserId');
+  const user = await User.findById(userId).select('zoomConnected zoomConnectedAt zoomUserId zoomAccessToken');
+  logger.info(`[Zoom OAuth] zoomStatus for userId=${userId}: zoomConnected=${user?.zoomConnected}, hasToken=${!!user?.zoomAccessToken}`);
   res.json({
     connected:   user?.zoomConnected ?? false,
     connectedAt: user?.zoomConnectedAt,
