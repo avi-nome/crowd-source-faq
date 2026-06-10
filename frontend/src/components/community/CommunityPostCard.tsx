@@ -1,5 +1,5 @@
 import React from 'react';
-import Badge from './Badge';
+import Badge from '../ui/Badge';
 import { useAuth } from '../../hooks/useAuth';
 import type { Post } from '../../types/ui';
 import { buildTransformedUrl, type CloudinaryAsset } from '../../hooks/useCloudinaryUpload';

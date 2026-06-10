@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import FreshnessTierSelector from '../../components/ui/FreshnessTierSelector';
+import FreshnessTierSelector from '../../components/faq/FreshnessTierSelector';
 import adminApi from '../utils/adminApi';
 import Badge from '../components/common/Badge';
 import Modal from '../components/common/Modal';

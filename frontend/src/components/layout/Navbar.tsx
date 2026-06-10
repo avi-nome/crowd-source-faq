@@ -4,7 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useAuthModal, useAuthGate } from '../../context/AuthModalContext';
 import { useFeatureFlag } from '../../context/FeatureFlagContext';
 import { buildTransformedUrl } from '../../hooks/useCloudinaryUpload';
-import NotificationBell from '../../components/ui/NotificationBell';
+import NotificationBell from '../../components/notifications/NotificationBell';
 import ThemeToggle from '../../components/ui/ThemeToggle';
 
 const navItems = [

@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import api, { friendlyError } from '../../utils/api';
-import Avatar from './Avatar';
-import Badge from './Badge';
-import Button from './Button';
+import Avatar from '../ui/Avatar';
+import Badge from '../ui/Badge';
+import Button from '../ui/Button';
 import { useAuthGate } from '../../context/AuthModalContext';
-import { DEPTH_COLORS, DEPTH_BARS, formatDate, countReplies } from './threadUtils';
+import { DEPTH_COLORS, DEPTH_BARS, formatDate, countReplies } from '../ui/threadUtils';
 
 interface CommentNodeProps {
   comment: Comment;

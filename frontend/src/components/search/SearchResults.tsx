@@ -1,6 +1,6 @@
 import React, { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Badge from './Badge';
+import Badge from '../ui/Badge';
 import api from '../../utils/api';
 import type { SearchResult } from '../../types/ui';
 
