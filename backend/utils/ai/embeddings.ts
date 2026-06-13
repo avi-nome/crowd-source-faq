@@ -103,18 +103,37 @@ async function callHfApiEmbedding(text: string): Promise<number[]> {
       throw new Error(`HF Inference API ${res.status}: ${errText}`);
     }
     const data = await res.json();
+    // v1.68.1 — the new router endpoint returns a FLAT
+    // 1D array of 1024 numbers (not a 2D nested array).
+    // Three valid response shapes from various HF
+    // endpoints/versions:
+    //
+    //   (1) 2D: [batch, dim]                  → [[0.06, 0.29, ...]]
+    //       E.g. some legacy endpoints, mxbai hidden states
+    //   (2) 1D: [dim]                         → [0.06, 0.29, ...]
+    //       E.g. the new router endpoint, fully pooled
+    //   (3) 3D: [batch, seq, dim]             → [[[0.06, ...]]]
+    //       E.g. mxbai hidden states without CLS pooling
+    //
+    // The previous code assumed shape (3) and tried to
+    // take data[0][0] as the vector — that returned a
+    // single number for the new endpoint, and normalizeL2
+    // threw "vec is not iterable" trying to for-loop over
+    // it. Now we probe the shape first.
     if (!Array.isArray(data) || data.length === 0) {
       throw new Error(`HF Inference API returned unexpected shape: ${JSON.stringify(data).slice(0, 200)}`);
     }
     const first = data[0];
-    // 3D (hidden states) vs 2D (pooled)?
-    if (Array.isArray(first) && Array.isArray(first[0])) {
-      // CLS pooling — mxbai paper default
-      const clsVector = first[0] as number[];
-      return normalizeL2(clsVector);
+    if (Array.isArray(first)) {
+      if (Array.isArray(first[0])) {
+        // shape (3): 3D — take CLS token (first token of first sequence)
+        return normalizeL2(first[0] as number[]);
+      }
+      // shape (1): 2D already-pooled, single vector in the batch
+      return normalizeL2(first as number[]);
     }
-    // Already pooled 2D
-    return normalizeL2(first as number[]);
+    // shape (2): 1D — data itself is the vector
+    return normalizeL2(data as number[]);
   } finally {
     clearTimeout(t);
   }

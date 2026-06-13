@@ -52,11 +52,12 @@ const seed = async () => {
     const faqPath = path.join(__dirname, '..', 'faqs.json');
     try {
       const faqDataRaw = await fs.readFile(faqPath, 'utf-8');
-      const allFaqs = JSON.parse(faqDataRaw).map((faq: any) => ({
-        question: faq.question,
-        answer: faq.answer,
-        category: faq.category || 'General',
-      }));
+      // v1.68 — faqs.json is a wrapped object: { source, version, ..., faqs: [...] }.
+      // Older revisions were a bare array; handle both shapes.
+      const parsed = JSON.parse(faqDataRaw) as unknown;
+      const allFaqs: { id?: string; section?: string; question: string; answer: string; category?: string }[] = Array.isArray(parsed)
+        ? (parsed as { question: string; answer: string; category?: string }[])
+        : ((parsed as { faqs?: { id?: string; section?: string; question: string; answer: string; category?: string }[] }).faqs ?? []);
       console.log(`  Found ${allFaqs.length} FAQs in faqs.json`);
 
       let inserted = 0, skipped = 0;
@@ -65,8 +66,14 @@ const seed = async () => {
         const existing = await FAQ.findOne({ question: faq.question });
         if (existing) { skipped++; continue; }
 
-        const embedding = await generateEmbedding(`Section: ${faq.category}. Question: ${faq.question}. Answer: ${faq.answer}`);
-        await FAQ.create({ ...faq, embedding, searchCount: 0 });
+        const embedding = await generateEmbedding(`Section: ${faq.category ?? faq.section ?? 'General'}. Question: ${faq.question}. Answer: ${faq.answer}`);
+        await FAQ.create({
+          question: faq.question,
+          answer: faq.answer,
+          category: faq.category ?? faq.section ?? 'General',
+          embedding,
+          searchCount: 0,
+        });
         inserted++;
         if ((i + 1) % 10 === 0) console.log(`  Processed ${i + 1}/${allFaqs.length} (${inserted} inserted, ${skipped} skipped)`);
       }
