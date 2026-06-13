@@ -96,7 +96,7 @@ function LogoutIcon() { return <svg width="15" height="15" viewBox="0 0 24 24" f
 function SidebarContent({ onMobileClose }: { onMobileClose: () => void }) {
   const { logout, user } = useAdminAuth();
   const navigate = useNavigate();
-  const handleLogout = () => { logout(); navigate('/admin/login'); };
+  const handleLogout = () => { logout(); navigate('/'); };
 
   return (
     <div className="flex flex-col h-full bg-card border-r border-border">

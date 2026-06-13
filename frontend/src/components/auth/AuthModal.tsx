@@ -1,5 +1,6 @@
 import React, { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
-import { useAuth } from '../../hooks/useAuth';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth, type User } from '../../hooks/useAuth';
 import { useAuthModal } from '../../context/AuthModalContext';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
@@ -22,6 +23,8 @@ type Tab = 'signin' | 'register';
 export default function AuthModal() {
   const { isOpen, initialTab, closeModal, prompt } = useAuthModal();
   const { login, register } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [tab, setTab] = useState<Tab>(initialTab);
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
@@ -122,7 +125,22 @@ export default function AuthModal() {
     }
     setLoading(true);
     try {
-      await login(loginForm.email.trim(), loginForm.password);
+      const loggedInUser: User = await login(loginForm.email.trim(), loginForm.password);
+      // v1.68 — smart routing after login:
+      //   - if URL has ?next=/admin (came from /admin/login), honor it
+      //   - else if the user is admin/moderator, send to /admin
+      //   - else, stay where they were (no navigation)
+      // (replaces the previous "one login that didn't go
+      // anywhere" — the admin login page was just a visual
+      // duplicate that submitted to the same endpoint.)
+      const params = new URLSearchParams(location.search);
+      const next = params.get('next');
+      const isAdmin = loggedInUser.role === 'admin' || loggedInUser.role === 'moderator';
+      if (next) {
+        navigate(next, { replace: true });
+      } else if (isAdmin) {
+        navigate('/admin', { replace: true });
+      }
       // Set closing=true + closeModal() — the sequence matters.
       // closing=true keeps the DOM alive (fade animation)
       // closeModal() sets isOpen=false so the provider's effect can detect

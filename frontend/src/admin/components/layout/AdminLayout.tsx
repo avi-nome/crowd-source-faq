@@ -28,7 +28,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!isAdmin) return <Navigate to="/admin/login" replace />;
+  if (!isAdmin) return <Navigate to="/?next=/admin" replace />;
 
   return (
     <div className="min-h-screen bg-bg flex">

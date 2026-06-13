@@ -24,7 +24,8 @@ const SupportTicketPage = lazy(() => import('./pages/SupportTicketPage'));
 const GoldenTicketPage = lazy(() => import('./pages/GoldenTicketPage'));
 
 // Admin pages
-const AdminLogin = lazy(() => import('./admin/pages/AdminLogin'));
+// v1.68 — AdminLogin page is gone. The single global AuthModal
+// (rendered by AuthModalHost) handles sign-in for everyone.
 const AdminDashboard = lazy(() => import('./admin/pages/AdminDashboard'));
 const AdminFAQs = lazy(() => import('./admin/pages/AdminFAQs'));
 const AdminUsers = lazy(() => import('./admin/pages/AdminUsers'));
@@ -153,7 +154,16 @@ function AppRoutes() {
         />
 
         {/* Admin Panel dedicated routes (guarded by AdminRoute) */}
-        <Route path="/admin/login" element={<AdminLogin />} />
+        {/* v1.68 — /admin/login is gone. The single global AuthModal
+            (rendered by AuthModalHost below) handles sign-in for
+            everyone. Visiting /admin/login now bounces to / with
+            a ?next=/admin hint, so after the user signs in the
+            smart-routing in AuthModal.handleLoginSubmit sends them
+            to /admin. Same UX, one login page. */}
+        <Route
+          path="/admin/login"
+          element={<Navigate to="/?next=/admin" replace />}
+        />
         <Route path="/admin" element={<AdminRoute><AdminLayout><AdminDashboard /></AdminLayout></AdminRoute>} />
         <Route path="/admin/faqs" element={<AdminRoute><AdminLayout><AdminFAQs /></AdminLayout></AdminRoute>} />
         <Route path="/admin/users" element={<AdminRoute><AdminLayout><AdminUsers /></AdminLayout></AdminRoute>} />

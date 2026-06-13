@@ -20,7 +20,11 @@ adminApi.interceptors.response.use(
       if (error.response.status === 401 || error.response.status === 403) {
         localStorage.removeItem('yaksha_token');
         localStorage.removeItem('yaksha_user');
-        window.location.href = '/admin/login';
+        // v1.68 — single-login. /admin/login is gone, so a 401
+        // for an admin route bounces to / with a ?next=/admin
+        // hint. The AuthModal on / will pick up the hint and
+        // route the user to /admin after sign-in.
+        window.location.href = '/?next=/admin';
       }
     }
     return Promise.reject(error);
