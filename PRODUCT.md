@@ -96,6 +96,6 @@ Four zero-touch pillars, in order of automation:
 
 ## Repository
 
-- GitHub: https://github.com/vicharanashala/cs15
+- GitHub: https://github.com/vicharanashala/crowd-source-faq
 - License: see [`LICENSE`](LICENSE)
 - Branch: `main` (active), with `MCSFAQ/main-v2` for the next iteration

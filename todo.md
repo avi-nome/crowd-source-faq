@@ -87,7 +87,7 @@ The 8 commands in `backend/bot/commands/*.ts` all accept `(interaction, config, 
 
 ## What NOT To Do
 
-- **Do not push to `MCSFAQ/main`.** The production branch is `main` on `github.com/vicharanashala/cs15`. `MCSFAQ/main` is a separate, older branch.
+- **Do not push to `MCSFAQ/main`.** The production branch is `main` on `github.com/vicharanashala/crowd-source-faq`. `MCSFAQ/main` is a separate, older branch.
 - **Do not force-push `main`.** The v1.69 merge was a regular merge commit (`6472355`); force-pushing would break the SHA chain for any downstream clones.
 - **Do not skip the migration script.** The new collections (ProgramSettings, ProgramEnrollment, ProgramReputation, per-bucket AiConfig/FeatureFlag) need to exist for the admin UI widgets to work end-to-end.
 
@@ -95,7 +95,7 @@ The 8 commands in `backend/bot/commands/*.ts` all accept `(interaction, config, 
 
 ## Reference
 
-- **PR #65**: https://github.com/vicharanashala/cs15/pull/65
+- **PR #65**: https://github.com/vicharanashala/crowd-source-faq/pull/65
 - **Merge commit on main**: `6472355`
 - **Feature branch** (now deleted from remote): `v1.69-multi-program-merge`
 - **Design doc**: `context/multi-program-cms-design.md`

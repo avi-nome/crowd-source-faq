@@ -19,8 +19,8 @@ Start with the [Vision section in the README](./README.md#vision) — every cont
 ## Local Setup
 
 ```bash
-git clone https://github.com/vicharanashala/cs15
-cd cs15
+git clone https://github.com/vicharanashala/crowd-source-faq
+cd crowd-source-faq
 cd backend && npm install
 cd ../frontend && npm install
 cd ..
