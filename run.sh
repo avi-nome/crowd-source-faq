@@ -301,7 +301,94 @@ check_url_alive() {
   curl -sf --max-time 2 http://localhost:5173 > /dev/null 2>&1
 }
 
+# ── Check for remote updates on current branch ────────────────────────────────
+check_for_updates() {
+  # Skip if not in a git repo
+  if ! git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    return 0
+  fi
+
+  cd "$ROOT"
+
+  # Get current branch
+  local current_branch
+  current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+  if [ -z "$current_branch" ] || [ "$current_branch" = "HEAD" ]; then
+    dim "not on a named branch — skipping update check"
+    return 0
+  fi
+
+  # Check upstream tracking branch exists
+  local upstream
+  upstream=$(git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>/dev/null || true)
+  if [ -z "$upstream" ]; then
+    dim "branch '$current_branch' has no upstream tracking — skipping update check"
+    return 0
+  fi
+
+  log "checking for updates on $current_branch..."
+
+  # Fetch silently to update remote refs
+  if ! git fetch --quiet 2>/dev/null; then
+    warn "could not fetch from remote — skipping update check"
+    return 0
+  fi
+
+  # Count commits ahead/behind
+  local ahead behind
+  ahead=$(git rev-list --count "${upstream}..HEAD" 2>/dev/null || echo 0)
+  behind=$(git rev-list --count "HEAD..${upstream}" 2>/dev/null || echo 0)
+
+  # Nothing new on remote
+  if [ "$behind" -eq 0 ]; then
+    if [ "$ahead" -eq 0 ]; then
+      ok "branch '$current_branch' is up to date with $upstream"
+    else
+      dim "no new commits on $upstream ($ahead local commit(s) ahead)"
+    fi
+    return 0
+  fi
+
+  echo ""
+  warn "$behind new commit(s) available on $upstream"
+  dim "your local branch is behind by $behind commit(s):"
+  git log --oneline "HEAD..${upstream}" 2>/dev/null | head -5 | sed "s/^/${F_DIM}    ${F_RESET}/"
+  [ "$behind" -gt 5 ] && dim "    ... and $((behind - 5)) more"
+
+  # Warn if there are uncommitted local changes
+  if ! git diff --quiet HEAD 2>/dev/null || ! git diff --cached --quiet HEAD 2>/dev/null; then
+    warn "you have uncommitted local changes — pull may conflict"
+  fi
+
+  echo ""
+  echo -n "  Pull latest changes from '$upstream'? [y/N] (auto-skip in 7s): "
+  if read -t 7 -r reply; then
+    : # got a reply within timeout
+  else
+    echo ""
+    dim "no response in 7s — skipping pull"
+    return 0
+  fi
+  case "$reply" in
+    [yY]|[yY][eE][sS])
+      log "pulling from $upstream..."
+      if git pull 2>&1 | sed "s/^/${F_DIM}    ${F_RESET}/"; then
+        ok "pull complete"
+      else
+        warn "pull failed — resolve conflicts manually before starting servers"
+        return 0
+      fi
+      ;;
+    *)
+      dim "skipped — continuing with local state"
+      ;;
+  esac
+  echo ""
+}
+
 # ── Main ───────────────────────────────────────────────────────────────────────
+echo ""
+check_for_updates
 echo ""
 alert "Yaksha FAQ Portal — full stack runner"
 echo ""
