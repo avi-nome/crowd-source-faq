@@ -104,6 +104,29 @@ let _queue: Queue<DocumentJobData> | null = null;
 let _worker: Worker<DocumentJobData> | null = null;
 let _events: QueueEvents | null = null;
 
+function handleQueueConnectionError(err: Error) {
+  const msg = err.message || '';
+  const lowerMsg = msg.toLowerCase();
+  if (
+    lowerMsg.includes('econnrefused') ||
+    lowerMsg.includes('rate limit') ||
+    lowerMsg.includes('quota') ||
+    lowerMsg.includes('forbidden') ||
+    lowerMsg.includes('limit exceeded') ||
+    lowerMsg.includes('max requests')
+  ) {
+    if (!useLocalFallback) {
+      logger.warn('[documentQueue] Remote Redis connection failed. Falling back to local Redis.');
+      useLocalFallback = true;
+      void recreateQueueAndWorker();
+    } else {
+      logger.error('[documentQueue] Fallback local Redis also failed. Disabling document processing worker.');
+      queueFailed = true;
+      void stopDocumentWorker();
+    }
+  }
+}
+
 export interface DocumentJobData {
   documentId: string;
   /** Base64-encoded file bytes. We re-encode so the job payload
@@ -128,6 +151,10 @@ export function getDocumentQueue(): Queue<DocumentJobData> | null {
   if (!conn) return null;
   // BullMQ creates its own ioredis connection from these options.
   _queue = new Queue<DocumentJobData>(QUEUE_NAME, { connection: conn });
+  _queue.on('error', (err) => {
+    logger.warn(`[documentQueue] Queue error: ${err.message}`);
+    handleQueueConnectionError(err);
+  });
   return _queue;
 }
 
@@ -194,29 +221,14 @@ export function startDocumentWorker(): boolean {
   });
   _worker.on('error', (err) => {
     logger.warn(`[documentQueue] worker error: ${err.message}`);
-    const msg = err.message || '';
-    const lowerMsg = msg.toLowerCase();
-    if (
-      lowerMsg.includes('econnrefused') ||
-      lowerMsg.includes('rate limit') ||
-      lowerMsg.includes('quota') ||
-      lowerMsg.includes('forbidden') ||
-      lowerMsg.includes('limit exceeded') ||
-      lowerMsg.includes('max requests')
-    ) {
-      if (!useLocalFallback) {
-        logger.warn('[documentQueue] Remote Redis connection failed. Falling back to local Redis.');
-        useLocalFallback = true;
-        void recreateQueueAndWorker();
-      } else {
-        logger.error('[documentQueue] Fallback local Redis also failed. Disabling document processing worker.');
-        queueFailed = true;
-        void stopDocumentWorker();
-      }
-    }
+    handleQueueConnectionError(err);
   });
 
   _events = new QueueEvents(QUEUE_NAME, { connection: conn });
+  _events.on('error', (err) => {
+    logger.warn(`[documentQueue] QueueEvents error: ${err.message}`);
+    handleQueueConnectionError(err);
+  });
   _events.on('failed', ({ jobId, failedReason }) => {
     logger.warn(`[documentQueue] event failed ${jobId}: ${failedReason}`);
   });
@@ -243,6 +255,10 @@ async function recreateQueueAndWorker(): Promise<void> {
     const conn = buildConnectionOptions();
     if (conn) {
       _queue = new Queue<DocumentJobData>(QUEUE_NAME, { connection: conn });
+      _queue.on('error', (err) => {
+        logger.warn(`[documentQueue] fallback Queue error: ${err.message}`);
+        handleQueueConnectionError(err);
+      });
       _worker = new Worker<DocumentJobData, DocumentJobResult>(QUEUE_NAME, processor, {
         connection: conn,
         concurrency: 3,
@@ -254,23 +270,14 @@ async function recreateQueueAndWorker(): Promise<void> {
       });
       _worker.on('error', (err) => {
         logger.warn(`[documentQueue] fallback worker error: ${err.message}`);
-        const msg = err.message || '';
-        const lowerMsg = msg.toLowerCase();
-        if (
-          lowerMsg.includes('econnrefused') ||
-          lowerMsg.includes('rate limit') ||
-          lowerMsg.includes('quota') ||
-          lowerMsg.includes('forbidden') ||
-          lowerMsg.includes('limit exceeded') ||
-          lowerMsg.includes('max requests')
-        ) {
-          logger.error('[documentQueue] Fallback local Redis failed. Disabling document processing worker.');
-          queueFailed = true;
-          void stopDocumentWorker();
-        }
+        handleQueueConnectionError(err);
       });
 
       _events = new QueueEvents(QUEUE_NAME, { connection: conn });
+      _events.on('error', (err) => {
+        logger.warn(`[documentQueue] fallback QueueEvents error: ${err.message}`);
+        handleQueueConnectionError(err);
+      });
       logger.info('[documentQueue] Recreated document queue and worker using local Redis fallback');
     }
   } catch (err) {
