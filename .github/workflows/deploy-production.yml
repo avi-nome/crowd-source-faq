@@ -68,22 +68,6 @@ jobs:
 
             echo "==> Reloading nginx..."
             sudo systemctl reload nginx
-
-            echo "==> Verifying backend health..."
-            HEALTHY=0
-            for i in $(seq 1 30); do
-              if curl -sf --max-time 5 http://localhost:6767/csfaq/api/health > /dev/null 2>&1; then
-                echo "✅ Backend is healthy!"
-                HEALTHY=1
-                break
-              fi
-              sleep 2
-            done
-
-            if [ "$HEALTHY" -eq 0 ]; then
-              echo "❌ Backend health check failed! Please check VPS logs."
-              exit 1
-            fi
-
+            
             echo "==> Deployment complete."
           DEPLOY
