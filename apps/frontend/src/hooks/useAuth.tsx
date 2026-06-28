@@ -57,7 +57,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (
         !parsed ||
         typeof parsed !== 'object' ||
-        !(typeof parsed._id === 'string' && parsed._id.length > 0) ||
+        !(typeof parsed._id === 'string' && parsed._id.length > 0) &&
           !(typeof parsed.email === 'string' && parsed.email.length > 0)
       ) {
         localStorage.removeItem('yaksha_user');
