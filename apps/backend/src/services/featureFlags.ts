@@ -143,6 +143,24 @@ export const FEATURE_FLAGS = {
       'the button is hidden from the UI. Toggle on to re-enable the chatbot for users.',
     category: 'ai',
   },
+  // Phase 8 — auto-discover mode for the WebPage collection. When
+  // enabled, the bootstrap cron (every 6h) calls webCrawler.runAutoDiscover
+  // which fetches each configured seed URL, follows same-domain links
+  // to depth 1, and upserts the results as `source='auto_discovered'`
+  // rows with `approved: false`. An admin then has to PATCH
+  // /admin/web-pages/:id/approve each row before it surfaces in the
+  // retrieval fan-out. Default false so the cron never runs without
+  // an explicit opt-in.
+  webAutoDiscover: {
+    default: false,
+    label: 'Web Auto-Discover (Phase 8)',
+    description:
+      'When enabled, a 6-hourly cron fetches configured seed URLs and indexes them ' +
+      'as `source=auto_discovered` WebPage rows with `approved=false`. Admins then ' +
+      'approve each row via PATCH /admin/web-pages/:id/approve before it surfaces ' +
+      'in retrieval. Leave OFF until you have reviewed which seed URLs to crawl.',
+    category: 'integrations',
+  },
 } as const satisfies Record<string, FeatureFlagMeta>;
 
 /** Union of every registered flag key. Derived from the registry so

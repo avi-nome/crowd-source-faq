@@ -1,17 +1,28 @@
 /**
- * webFetcher — Phase 5.
+ * webFetcher — Phase 5, extended in Phase 8.
  *
- * Minimal HTML → main-text extractor for admin-pasted URLs.
+ * Two flavours of fetch + extract:
+ *
+ *  1. `fetchAndExtract(url)` — Phase 5 path for admin uploads where
+ *     the page content has just been fetched by the caller. Returns
+ *     `{ title, text, statusCode }`. No link extraction.
+ *
+ *  2. `fetchAndExtractPage(url)` — Phase 8 helper for the auto-discover
+ *     webCrawler. Goes out, hits the URL, extracts text AND same-domain
+ *     links (depth 1) so the crawler can decide what else to fetch.
+ *     Returns `{ title, text, statusCode, finalUrl, links }`. The
+ *     caller (webCrawler) is responsible for recursing into `links`
+ *     up to its own per-seed cap.
  *
  * Why no cheerio / readability?
  *  - Phase 5 scope is "admins paste a URL, we index it". A full
- *    readbility.js pipeline would 5x our extraction cost and pull in
- *    a third-party HTML parser. For the current shape of data (curated
+ *    readability.js pipeline would 5x our extraction cost and pull
+ *    in a third-party HTML parser. For the current shape of data (curated
  *    landing pages, blog posts, docs) a regex strip + entity decode is
  *    good enough — the text index tolerates noise well, and admin
  *    review catches junk pages.
  *
- * Constraints (Phase 5):
+ * Constraints (Phase 5 → 8):
  *  - 2 MB body cap (avoid loading huge pages).
  *  - 10 s timeout on both headers and body.
  *  - 3 redirects max.
@@ -21,6 +32,9 @@
  *  - Main text: strip <script>/<style>/<noscript>/<svg>, then strip
  *    all tags, decode common HTML entities, collapse whitespace, cap
  *    at 200_000 chars (~50k tokens worst case).
+ *  - Phase 8: same-domain links are collected from <a href="..."> via
+ *    a regex (not a full parser) — sufficient for the "depth-1 follow"
+ *    shape the crawler needs.
  */
 
 import { request } from 'undici';
@@ -35,7 +49,30 @@ export interface FetchedPage {
   statusCode: number;
 }
 
+export interface FetchedAndLinked extends FetchedPage {
+  /** Where we ended up after redirects. */
+  finalUrl: string;
+  /** Same-domain <a href> targets. Capped at ~200 entries. */
+  links: string[];
+}
+
 export async function fetchAndExtract(url: string): Promise<FetchedPage> {
+  const { title, text, statusCode } = await fetchAndExtractPage(url);
+  return { title, text, statusCode };
+}
+
+/**
+ * Fetch + extract a single page AND its same-domain links (depth 1).
+ *
+ * Internal shape used by both:
+ *  - adminWebPages.controller addWebPage (which only reads title/text/statusCode)
+ *  - webCrawler runAutoDiscover (which iterates over `links` next)
+ *
+ * The two callers see different shape contracts via the wrappers
+ * above / `runAutoDiscover`. This function intentionally does no
+ * cap math on links — it's the caller's job to bound recursion.
+ */
+export async function fetchAndExtractPage(url: string): Promise<FetchedAndLinked> {
   const res = await request(url, {
     method: 'GET',
     headers: {
@@ -66,7 +103,9 @@ export async function fetchAndExtract(url: string): Promise<FetchedPage> {
   const html = Buffer.concat(chunks).toString('utf8');
   const title = extractTitle(html);
   const text = extractMainText(html);
-  return { title, text, statusCode: res.statusCode };
+  const finalUrl = url; // undici's request doesn't expose final URL on this version; we don't track redirects here
+  const links = extractSameDomainLinks(html, finalUrl);
+  return { title, text, statusCode: res.statusCode, finalUrl, links };
 }
 
 function extractTitle(html: string): string {
@@ -96,4 +135,31 @@ function extractMainText(html: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim()
     .slice(0, 200_000);
+}
+
+/**
+ * Pull same-domain <a href> targets out of an HTML blob. Approximate
+ * regex — anchors with relative paths get absolutised against `baseUrl`,
+ * anchors on other origins are dropped. Intentionally capped at 200
+ * entries so a single page can't blow up the BFS queue.
+ */
+function extractSameDomainLinks(html: string, baseUrl: string): string[] {
+  let base: URL;
+  try { base = new URL(baseUrl); } catch { return []; }
+  const hrefs = new Set<string>();
+  const re = /<a\s+[^>]*href=["']([^"']+)["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    const raw = m[1].trim();
+    if (!raw || raw.startsWith('#') || raw.startsWith('mailto:') || raw.startsWith('javascript:')) continue;
+    let abs: URL;
+    try { abs = new URL(raw, base); } catch { continue; }
+    if (abs.hostname !== base.hostname) continue;
+    if (!/^https?:$/.test(abs.protocol)) continue;
+    // Strip the fragment — same-page anchors don't make sense as fetch targets.
+    abs.hash = '';
+    hrefs.add(abs.toString());
+    if (hrefs.size >= 200) break;
+  }
+  return Array.from(hrefs);
 }

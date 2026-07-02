@@ -210,6 +210,30 @@ export async function startup(config: any): Promise<void> {
     logger.info('[server] auto-answer cron disabled (communityAutoAnswer feature flag off)');
   }
 
+  // Phase 8 — webAutoDiscover cron. Fetches each configured seed URL
+  // every 6 hours, follows same-domain links to depth 1, and upserts
+  // the results as `source='auto_discovered'` WebPage rows with
+  // `approved: false`. An admin then has to explicitly PATCH
+  // /admin/web-pages/:id/approve each row before it surfaces in the
+  // retrieval fan-out. Default off (see FEATURE_FLAGS) so the cron
+  // never runs without an explicit opt-in.
+  if (await featureFlags.isEnabled('webAutoDiscover')) {
+    const { runAutoDiscover } = await import('../services/webCrawler.js');
+    const webAutoDiscoverIntervalMs = 6 * 60 * 60 * 1000; // 6h
+    cronManager.register({
+      name: 'web-auto-discover',
+      handler: () => runAutoDiscover(),
+      intervalMs: webAutoDiscoverIntervalMs,
+      runOnStartup: false, // opt-in only — don't surprise the operator on first boot
+      startupDelayMs: 30_000, // small startup grace so other crons start first
+    });
+    logger.info(
+      `[server] web auto-discover cron registered (every ${webAutoDiscoverIntervalMs / 1000}s, concurrency-locked)`,
+    );
+  } else {
+    logger.info('[server] web auto-discover cron disabled (webAutoDiscover feature flag off)');
+  }
+
   // Start cron manager
   cronManager.startAll();
 }
