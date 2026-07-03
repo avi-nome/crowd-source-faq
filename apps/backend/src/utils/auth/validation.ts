@@ -40,6 +40,15 @@ export const updateProfileSchema = z.object({
   name:  z.string().min(2).max(100).optional(),
   email: z.string().email().optional(),
   guidedTourCompleted: z.boolean().optional(),
+  avatar: z
+    .object({
+      url: z.string().url().max(1000),
+      publicId: z.string().max(200).optional(),
+      gcsUri: z.string().max(1000).optional(),
+      objectPath: z.string().max(1000).optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 // ─── FAQ ────────────────────────────────────────────────────────────────────────

@@ -279,6 +279,10 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
     }> = {};
     if (name) updates.name = name;
     if (email) {
+      if (typeof email !== 'string') {
+        res.status(400).json({ message: 'Invalid email parameter.' });
+        return;
+      }
       // Check if email is already taken by another user
       const existing = await User.findOne({ email, _id: { $ne: req.user._id } });
       if (existing) {
@@ -294,47 +298,67 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
       //   - GCS URLs (media.mydomain.com/...) — new shape, requires gcsUri + objectPath
       if (avatar === null) {
         updates.avatar = null;
-      } else if (!avatar.url) {
-        res.status(400).json({ message: 'avatar.url is required.' });
-        return;
-      } else if (avatar.url.includes('res.cloudinary.com/')) {
-        if (!avatar.publicId) {
-          res.status(400).json({ message: 'avatar requires publicId for Cloudinary URLs.' });
-          return;
-        }
-        try {
-          const { isOurCloudinaryAsset, getCloudinaryConfig } = await import('../../integrations/cloudinary/cloudinary.js');
-          const cfg = getCloudinaryConfig();
-          if (!isOurCloudinaryAsset(avatar.url, cfg.cloudName)) {
-            res.status(400).json({ message: 'avatar.url must be a valid Cloudinary URL for this account.' });
-            return;
-          }
-        } catch (e) {
-          res.status(503).json({ message: (e as Error).message });
-          return;
-        }
-        updates.avatar = { url: avatar.url, publicId: avatar.publicId };
       } else {
-        // GCS branch — new default for all fresh uploads.
-        if (!avatar.gcsUri || !avatar.objectPath) {
-          res.status(400).json({ message: 'avatar requires gcsUri and objectPath for GCS URLs.' });
+        if (!avatar || typeof avatar !== 'object') {
+          res.status(400).json({ message: 'Invalid avatar parameter.' });
           return;
         }
-        try {
-          const { isOurGcsAsset } = await import('../../integrations/gcs/gcs.js');
-          if (!isOurGcsAsset(avatar.url)) {
-            res.status(400).json({ message: 'avatar.url must be a valid GCS asset URL.' });
+        if (typeof avatar.url !== 'string') {
+          res.status(400).json({ message: 'avatar.url is required and must be a string.' });
+          return;
+        }
+        if (avatar.publicId !== undefined && typeof avatar.publicId !== 'string') {
+          res.status(400).json({ message: 'avatar.publicId must be a string.' });
+          return;
+        }
+        if (avatar.gcsUri !== undefined && typeof avatar.gcsUri !== 'string') {
+          res.status(400).json({ message: 'avatar.gcsUri must be a string.' });
+          return;
+        }
+        if (avatar.objectPath !== undefined && typeof avatar.objectPath !== 'string') {
+          res.status(400).json({ message: 'avatar.objectPath must be a string.' });
+          return;
+        }
+
+        if (avatar.url.includes('res.cloudinary.com/')) {
+          if (!avatar.publicId) {
+            res.status(400).json({ message: 'avatar requires publicId for Cloudinary URLs.' });
             return;
           }
-        } catch (e) {
-          res.status(503).json({ message: (e as Error).message });
-          return;
+          try {
+            const { isOurCloudinaryAsset, getCloudinaryConfig } = await import('../../integrations/cloudinary/cloudinary.js');
+            const cfg = getCloudinaryConfig();
+            if (!isOurCloudinaryAsset(avatar.url, cfg.cloudName)) {
+              res.status(400).json({ message: 'avatar.url must be a valid Cloudinary URL for this account.' });
+              return;
+            }
+          } catch (e) {
+            res.status(503).json({ message: (e as Error).message });
+            return;
+          }
+          updates.avatar = { url: avatar.url, publicId: avatar.publicId };
+        } else {
+          // GCS branch — new default for all fresh uploads.
+          if (!avatar.gcsUri || !avatar.objectPath) {
+            res.status(400).json({ message: 'avatar requires gcsUri and objectPath for GCS URLs.' });
+            return;
+          }
+          try {
+            const { isOurGcsAsset } = await import('../../integrations/gcs/gcs.js');
+            if (!isOurGcsAsset(avatar.url)) {
+              res.status(400).json({ message: 'avatar.url must be a valid GCS asset URL.' });
+              return;
+            }
+          } catch (e) {
+            res.status(503).json({ message: (e as Error).message });
+            return;
+          }
+          updates.avatar = {
+            url: avatar.url,
+            gcsUri: avatar.gcsUri,
+            objectPath: avatar.objectPath,
+          };
         }
-        updates.avatar = {
-          url: avatar.url,
-          gcsUri: avatar.gcsUri,
-          objectPath: avatar.objectPath,
-        };
       }
     }
 
