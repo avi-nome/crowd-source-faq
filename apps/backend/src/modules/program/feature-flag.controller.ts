@@ -62,6 +62,14 @@ export const FEATURE_FLAGS = {
     description: 'Enables the FAQ freshness report and review system.',
     defaultEnabled: true,
   },
+  quizMode: {
+    label: 'FAQ Quiz Mode',
+    description:
+      'Spaced-repetition quiz layer over approved FAQs. Users answer ' +
+      'auto-generated questions; wrong answers resurface sooner. Ties ' +
+      'into the existing SP/reputation system. Experimental.',
+    defaultEnabled: false,
+  },
 } as const;
 
 export type FeatureFlagKey = keyof typeof FEATURE_FLAGS;
