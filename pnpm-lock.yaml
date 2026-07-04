@@ -142,6 +142,9 @@ importers:
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
+      '@types/express-serve-static-core':
+        specifier: ^5.1.1
+        version: 5.1.1
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
