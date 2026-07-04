@@ -1,5 +1,6 @@
 import express, { Express } from 'express';
 import authRoutes from '../modules/auth/auth.routes.js';
+import authBridgeRoutes from '../modules/auth/auth-bridge.routes.js';
 import faqRoutes from '../modules/faq/faq.routes.js';
 import communityRoutes from '../modules/community/community.routes.js';
 import searchRoutes from '../modules/search/search.routes.js';
@@ -44,6 +45,7 @@ export function registerRoutes(app: Express): void {
   const router = express.Router();
 
   router.use('/auth', authRoutes);
+  router.use('/auth/bridge', authBridgeRoutes);
   router.use('/faq', faqRoutes);
   router.use('/community', communityRoutes);
   router.use('/search', searchRoutes);

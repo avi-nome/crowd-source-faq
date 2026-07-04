@@ -87,6 +87,19 @@ export function createApp(config: any): Express {
   // dashboard by program, user, or endpoint.
   app.use(sentryRequestTagsMiddleware);
 
+  // NOTE: bridge-cookie auth on the backend is intentionally NOT installed.
+  // The samagama.in bridge flow is:
+  //   1. samagama.in hits /api/auth/bridge/exchange → gets JWT
+  //   2. samagama.in stores JWT in yaksha_session cookie (Domain=.samagama.in)
+  //   3. User navigates to /csfaq — browser sends the cookie
+  //   4. Frontend (cookieBridge.ts) reads the cookie on app boot and
+  //      mirrors it into localStorage.yaksha_token
+  //   5. All subsequent requests go through the existing
+  //      Authorization: Bearer <jwt> path via authShared.ts
+  // This means the frontend cookie bridge is enough; we don't need a
+  // backend middleware that hydrates req.user from the cookie. Keeping
+  // the bridge endpoint + frontend bridge is the minimal surface area.
+
   // Register all routes
   registerRoutes(app);
 
