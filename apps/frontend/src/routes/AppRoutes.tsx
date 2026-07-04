@@ -19,6 +19,7 @@ const SupportIndexPage = lazy(() => import('../pages/SupportIndexPage'));
 const NewSupportRequestPage = lazy(() => import('../pages/NewSupportRequestPage'));
 const SupportTicketPage = lazy(() => import('../pages/SupportTicketPage'));
 const GoldenTicketPage = lazy(() => import('../pages/GoldenTicketPage'));
+const QuizPage = lazy(() => import('../pages/QuizPage'));
 const WelcomePackagePage = lazy(() => import('../pages/WelcomePackagePage'));
 const ProgramPortalPage = lazy(() => import('../pages/ProgramPortalPage'));
 const ProgramPage = lazy(() => import('../pages/ProgramPage'));
@@ -78,6 +79,13 @@ function GoldenRoute() {
     </FeatureGate>
   );
 }
+function QuizRoute() {
+  return (
+    <FeatureGate featureKey="quizMode" featureLabel="FAQ Quiz Mode">
+      <QuizPage />
+    </FeatureGate>
+  );
+}
 
 export default function AppRoutes() {
   const { loading } = useAuth();
@@ -120,6 +128,7 @@ export default function AppRoutes() {
             <Route path="/support/new" element={<SupportNewRoute />} />
             <Route path="/support/:id" element={<SupportTicketRoute />} />
             <Route path="/golden" element={<GoldenRoute />} />
+            <Route path="/quiz" element={<QuizRoute />} />
             <Route path="/program/:slug" element={<ProgramPage />} />
             <Route
               path="/account"
