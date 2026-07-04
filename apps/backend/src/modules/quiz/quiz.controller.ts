@@ -1,4 +1,7 @@
-import { Request, Response } from 'express';
+import User, { calculateTier } from '../auth/user.model.js';
+import ReputationLog from '../moderation/reputation-log.model.js';
+import { awardToUser } from '../moderation/program-reputation.model.js';
+import { autoAwardBadges } from '../moderation/reputation.controller.js';import { Request, Response } from 'express';
 import { Types } from 'mongoose';
 import FAQ from '../faq/faq.model.js';
 import { QuizCard, QuizSession } from './quiz.model.js';
@@ -154,7 +157,34 @@ export async function submitAnswer(req: Request, res: Response): Promise<void> {
     res.status(500).json({ message: 'Failed to submit answer.' });
   }
 }
+async function awardQuizPoints(
+  userId: Types.ObjectId,
+  batchId: Types.ObjectId | null,
+  correctCount: number
+) {
+  const delta = correctCount * 2; // +2 SP per correct answer in the session
+  if (delta === 0) return;
 
+  const user = await User.findById(userId);
+  if (!user) return;
+  user.points = Math.max(0, user.points + delta);
+  user.reputation = user.points;
+  user.tier = calculateTier(user.points);
+  await user.save();
+
+  if (batchId) await awardToUser(userId, batchId, { points: delta }).catch(() => {});
+
+  await ReputationLog.create({
+    userId,
+    batchId,
+    delta,
+    reason: `Quiz session: ${correctCount} correct answer(s)`,
+    action: 'quiz_correct',
+    targetType: 'quiz',
+  });
+
+  autoAwardBadges(userId.toString()).catch(() => {});
+}
 // POST /api/quiz/sessions/:id/complete
 export async function completeSession(req: Request, res: Response): Promise<void> {
   try {
@@ -168,8 +198,14 @@ export async function completeSession(req: Request, res: Response): Promise<void
     session.completedAt = new Date();
     await session.save();
 
-    // Step 4 will hook points-awarding here.
 
+session.score = session.answers.filter((a) => a.correct).length;
+    session.completedAt = new Date();
+    await session.save();
+
+    await awardQuizPoints(req.user!._id, session.batchId, session.score);
+
+    res.json({ score: session.score, totalQuestions: session.totalQuestions });
     res.json({ score: session.score, totalQuestions: session.totalQuestions });
   } catch (err) {
     adminLog.error(`[quiz] completeSession failed: ${(err as Error).message}`);
