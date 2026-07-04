@@ -12,8 +12,7 @@ export const baseNavItems: NavItem[] = [
   { label: 'Community', to: '/community' },
 ];
 
-export function useNavItems() {
-  const { user } = useAuth();
+
 export function useNavItems() {
   const { user } = useAuth();
   const { enabled: supportOn } = useFeatureFlag('sessionSupport');

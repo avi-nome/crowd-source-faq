@@ -194,7 +194,7 @@ export const FEATURE_FLAGS = {
       'in retrieval. Leave OFF until you have reviewed which seed URLs to crawl.',
     category: 'integrations',
   },
-quizMode: {
+  quizMode: {
     default: false,
     label: 'FAQ Quiz Mode',
     description:
@@ -204,8 +204,6 @@ quizMode: {
     category: 'faq',
   },
 } as const satisfies Record<string, FeatureFlagMeta>;
-} as const satisfies Record<string, FeatureFlagMeta>;
-
 /** Union of every registered flag key. Derived from the registry so
  *  the two can never drift. */
 export type FeatureFlagKey = keyof typeof FEATURE_FLAGS;
