@@ -199,6 +199,21 @@ export const createPost = async (req: Request, res: Response): Promise<void> => 
     // Hydrate the author field before sending back the response
     await post.populate('author', 'name');
 
+    // ── Fire-and-forget auto-answer (latency fix: 24h cron → seconds) ─────
+    // Same pattern as comment.controller.ts addComment hook: dynamic
+    // import + .catch(). The user gets their 201 back immediately;
+    // the AI attempt runs in the background and persists its own
+    // aiContext / aiAnswerStatus writes asynchronously. The 24h cron
+    // stays in place as a safety net for any post that slips through
+    // (e.g. processPost threw an exception, the doc was created via
+    // a different path, etc.).
+    const { processPost } = await import('../../services/autoAnswer.js');
+    processPost(post._id).catch((err: Error) => {
+      communityLog.warn(
+        `[post] autoAnswer processPost failed for ${String(post._id)}: ${err.message}`,
+      );
+    });
+
     // Invalidate search cache so new post appears in community search immediately
     await invalidateCache().catch((err) => {
       communityLog.warn(`[post] Failed to invalidate cache on post creation: ${(err as Error).message}`);
