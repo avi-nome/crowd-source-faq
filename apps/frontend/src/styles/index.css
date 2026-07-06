@@ -754,7 +754,7 @@ select option {
 
   /* ═════════════════════════════════════════════════════════════
      .search-overlay — premium glassmorphism backdrop
-     Dark: strong blur + dark tint + faint sand glow.
+     Dark: strong blur + dark tint + faint accent glow.
      Light: soft dark overlay, blur(16px) — airy, not muddy.
      ═════════════════════════════════════════════════════════════ */
   .search-overlay {
@@ -763,7 +763,7 @@ select option {
     z-index: 30;
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    background-color: rgba(0, 0, 0, 0.25);
+    background-color: rgba(var(--text-primary-rgb) / 0.25);
     transition: opacity 0.3s ease;
   }
   [data-theme="dark"] .search-overlay {
@@ -775,23 +775,24 @@ select option {
 
   /* ═════════════════════════════════════════════════════════════
      .search-panel — premium glassmorphism modal container
-     Light: clean white glass, no muddy tint.
-     Dark: dark charcoal glass with subtle sand gradient.
+     Colors derived from theme tokens so the panel re-skins with
+     the rest of the site. Light: cream-tinted glass over warm
+     bg. Dark: pitch-tinted glass with faint accent gradient.
      ═════════════════════════════════════════════════════════════ */
   .search-panel {
-    background-color: rgba(255, 255, 255, 0.75);
+    background-color: rgb(var(--bg-card-rgb) / 0.85);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border: 1px solid #E4DDD3;
+    border: 1px solid rgb(var(--border-rgb));
     border-radius: 16px;
-    box-shadow: 0 20px 50px rgba(34, 34, 34, 0.14);
-    background-image: linear-gradient(135deg, rgb(var(--accent-rgb) / 0.06), rgba(255, 255, 255, 0.6));
+    box-shadow: 0 20px 50px rgb(var(--text-primary-rgb) / 0.14);
+    background-image: linear-gradient(135deg, rgb(var(--accent-rgb) / 0.06), rgb(var(--bg-card-rgb) / 0.6));
   }
   [data-theme="dark"] .search-panel {
-    background-color: rgba(25, 25, 25, 0.6);
+    background-color: rgb(var(--bg-card-rgb) / 0.6);
     backdrop-filter: blur(25px);
     -webkit-backdrop-filter: blur(25px);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 16px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
     background-image: linear-gradient(135deg, rgb(var(--accent-rgb) / 0.06), rgba(0, 0, 0, 0.2));
@@ -799,16 +800,15 @@ select option {
 
   /* ═════════════════════════════════════════════════════════════
      .search-bar-input — search bar inside the panel
-     Light: clean white with sand focus.
-     Dark: semi-transparent dark glass with sand focus.
+     All colours from theme tokens.
      ═════════════════════════════════════════════════════════════ */
   .search-bar-input {
-    background-color: #ffffff;
-    border: 1px solid #E4DDD3;
-    color: #222222;
+    background-color: rgb(var(--bg-card-rgb));
+    border: 1px solid rgb(var(--border-rgb));
+    color: rgb(var(--text-primary-rgb));
   }
   .search-bar-input::placeholder {
-    color: #8B8B8B;
+    color: rgb(var(--text-muted-rgb));
   }
   .search-bar-input:focus {
     border-color: rgb(var(--accent-rgb) / 0.55);
@@ -817,11 +817,11 @@ select option {
   }
   [data-theme="dark"] .search-bar-input {
     background-color: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #F2F2F2;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    color: rgb(var(--text-primary-rgb));
   }
   [data-theme="dark"] .search-bar-input::placeholder {
-    color: #7A7A7A;
+    color: rgb(var(--text-muted-rgb));
   }
   [data-theme="dark"] .search-bar-input:focus {
     border-color: rgb(var(--accent-rgb) / 0.45);
@@ -830,48 +830,46 @@ select option {
 
   /* ═════════════════════════════════════════════════════════════
      .search-list-item — dropdown list items
-     Light: clean white, dark text.
-     Dark: semi-transparent dark, soft text.
+     All colours from theme tokens.
      ═════════════════════════════════════════════════════════════ */
   .search-list-item {
-    background: #ffffff;
-    color: #222222;
+    background: rgb(var(--bg-card-rgb));
+    color: rgb(var(--text-primary-rgb));
     border: 1px solid transparent;
     transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   }
   .search-list-item:hover {
-    background-color: #FCFAF8;
-    color: #222222;
+    background-color: rgb(var(--bg-card-hover-rgb));
+    color: rgb(var(--text-primary-rgb));
   }
   .search-list-item.active {
     background-color: rgb(var(--accent-rgb) / 0.14);
     border: 1px solid rgb(var(--accent-rgb) / 0.30);
-    color: #222222;
+    color: rgb(var(--text-primary-rgb));
   }
   [data-theme="dark"] .search-list-item {
     background: transparent;
-    color: #B8B8B8;
+    color: rgb(var(--text-secondary-rgb));
     border: 1px solid transparent;
   }
   [data-theme="dark"] .search-list-item:hover {
     background-color: rgba(255, 255, 255, 0.04);
-    color: #F2F2F2;
+    color: rgb(var(--text-primary-rgb));
   }
   [data-theme="dark"] .search-list-item.active {
     background-color: rgb(var(--accent-rgb) / 0.10);
     border: 1px solid rgb(var(--accent-rgb) / 0.25);
-    color: #F2F2F2;
+    color: rgb(var(--text-primary-rgb));
   }
 
   /* ═════════════════════════════════════════════════════════════
      .search-pill — category/tag pills inside search dropdown
-     Light: clean soft tint, readable text.
-     Dark: semi-transparent dark, sand on hover.
+     All colours from theme tokens.
      ═════════════════════════════════════════════════════════════ */
   .search-pill {
-    background-color: #FCFAF8;
-    border: 1px solid #E4DDD3;
-    color: #555555;
+    background-color: rgb(var(--bg-card-rgb));
+    border: 1px solid rgb(var(--border-rgb));
+    color: rgb(var(--text-secondary-rgb));
     transition: background-color 0.15s ease, color 0.15s ease;
   }
   .search-pill:hover {
@@ -880,8 +878,8 @@ select option {
   }
   [data-theme="dark"] .search-pill {
     background-color: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #F2F2F2;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    color: rgb(var(--text-primary-rgb));
   }
   [data-theme="dark"] .search-pill:hover {
     background-color: rgb(var(--accent-rgb));
@@ -891,12 +889,11 @@ select option {
 
   /* ═════════════════════════════════════════════════════════════
      .search-skeleton — loading placeholder for search results
-     Light: soft warm tint, no border — clean and unobtrusive.
-     Dark: dark glass with subtle border.
+     All colours from theme tokens.
      ═════════════════════════════════════════════════════════════ */
   .search-skeleton {
-    background-color: rgba(255, 255, 255, 0.5);
-    border: 1px solid #E4DDD3;
+    background-color: rgb(var(--bg-card-rgb) / 0.5);
+    border: 1px solid rgb(var(--border-rgb));
     border-radius: 16px;
   }
   [data-theme="dark"] .search-skeleton {
@@ -906,20 +903,21 @@ select option {
 
   /* ═════════════════════════════════════════════════════════════
      Ask in Community (No Results block)
+     All colours from theme tokens.
      ═════════════════════════════════════════════════════════════ */
   .ask-community-container {
-    background-color: #FCFAF8;
-    border-color: #E4DDD3;
+    background-color: rgb(var(--bg-card-rgb));
+    border-color: rgb(var(--border-rgb));
   }
   .ask-community-container:hover {
     background-color: rgb(var(--accent-rgb) / 0.10);
     border-color: rgb(var(--accent-rgb) / 0.25);
   }
   .ask-community-title {
-    color: #222222;
+    color: rgb(var(--text-primary-rgb));
   }
   .ask-community-icon {
-    color: #222222;
+    color: rgb(var(--text-primary-rgb));
   }
   .ask-community-action {
     color: rgb(var(--accent-rgb));
@@ -927,16 +925,16 @@ select option {
 
   [data-theme="dark"] .ask-community-container {
     background-color: rgba(255, 255, 255, 0.03);
-    border-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.10);
   }
   [data-theme="dark"] .ask-community-container:hover {
     background-color: rgba(255, 255, 255, 0.05);
   }
   [data-theme="dark"] .ask-community-title {
-    color: rgba(255, 255, 255, 0.8);
+    color: rgb(var(--text-primary-rgb));
   }
   [data-theme="dark"] .ask-community-icon {
-    color: #ffffff;
+    color: rgb(var(--text-primary-rgb));
   }
   [data-theme="dark"] .ask-community-action {
     color: rgb(var(--accent-rgb));
@@ -945,8 +943,8 @@ select option {
      .search-popular-pill — enhanced popular search capsules
      Top 3 are prominent; all use rounded-full pills.
      Count badge inside: ml-auto styled separately.
-     DARK: dark glass bg, muted text, sand on hover.
-     LIGHT: warm bg, dark text, sand on hover.
+     DARK: dark glass bg, muted text, accent on hover.
+     LIGHT: warm bg, dark text, accent on hover.
      ═════════════════════════════════════════════════════════════ */
   .search-popular-pill {
     display: inline-flex;
@@ -954,9 +952,9 @@ select option {
     gap: 6px;
     padding: 6px 12px;
     border-radius: 9999px;
-    border: 1px solid #E4DDD3;
-    background-color: #FCFAF8;
-    color: #555555;
+    border: 1px solid rgb(var(--border-rgb));
+    background-color: rgb(var(--bg-card-rgb));
+    color: rgb(var(--text-secondary-rgb));
     font-size: 13px;
     font-weight: 500;
     line-height: 1;
@@ -986,16 +984,16 @@ select option {
     margin-left: auto;
     padding: 1px 6px;
     border-radius: 9999px;
-    background-color: rgba(228, 221, 211, 0.6);
-    color: #555555;
+    background-color: rgb(var(--border-rgb) / 0.6);
+    color: rgb(var(--text-secondary-rgb));
     font-size: 11px;
     font-weight: 500;
     line-height: 1.4;
   }
   [data-theme="dark"] .search-popular-pill {
     background-color: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #D1D5DB;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    color: rgb(var(--text-secondary-rgb));
   }
   [data-theme="dark"] .search-popular-pill:hover {
     background-color: rgb(var(--accent-rgb) / 0.10);
