@@ -25,6 +25,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import adminApi from '../../utils/adminApi';
 import { useCloudinarySvgUpload } from '../../../hooks/useCloudinarySvgUpload';
+import { inlineDangerBanner } from '../../../styles/style_config';
 
 type ResourceKind = 'video' | 'pdf' | 'pptx' | 'svg' | 'markdown' | 'txt' | 'link';
 
@@ -404,7 +405,7 @@ export default function AdminResourcesTab({ programId, refreshKey }: Props): Rea
   return (
     <div className="space-y-8">
       {(error || svgError) && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-2">
+        <div className={`${inlineDangerBanner} text-sm rounded-lg px-4 py-2`}>
           {error || svgError}
         </div>
       )}
@@ -594,7 +595,7 @@ export default function AdminResourcesTab({ programId, refreshKey }: Props): Rea
                 onClick={() => {
                   void handleDelete(r._id);
                 }}
-                className="px-2 py-1 text-xs rounded-md border border-border text-red-600 hover:bg-red-50"
+                className="px-2 py-1 text-xs rounded-md border border-border text-danger hover:bg-danger-light"
               >
                 Delete
               </button>
@@ -722,7 +723,7 @@ export default function AdminResourcesTab({ programId, refreshKey }: Props): Rea
                     onClick={() => {
                       void handleDeleteKnowledge(k._id);
                     }}
-                    className="px-2 py-1 text-xs rounded-md border border-border text-red-600 hover:bg-red-50"
+                    className="px-2 py-1 text-xs rounded-md border border-border text-danger hover:bg-danger-light"
                   >
                     Delete
                   </button>
@@ -814,7 +815,7 @@ export default function AdminResourcesTab({ programId, refreshKey }: Props): Rea
         </div>
 
         {genError && (
-          <div className="mt-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg px-3 py-2">
+          <div className={`${inlineDangerBanner} text-xs rounded-lg px-3 py-2 mt-3`}>
             {genError}
           </div>
         )}

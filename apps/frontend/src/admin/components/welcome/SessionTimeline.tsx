@@ -14,6 +14,7 @@
 
 import React, { useEffect, useState } from 'react';
 import adminApi from '../../utils/adminApi';
+import { inlineDangerBanner } from '../../../styles/style_config';
 
 export interface ActivityEntry {
   _id: string;
@@ -106,7 +107,7 @@ export default function SessionTimeline({ sessionId, isActive, onActivate, refre
 
       <div className="px-6 py-5">
         {error && (
-          <div className="mb-4 px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-xs text-red-700">
+          <div className={`${inlineDangerBanner} mb-4 px-3 py-2 rounded-lg text-xs`}>
             {error}
           </div>
         )}
@@ -188,8 +189,8 @@ function describe(entry: ActivityEntry): MetaOut {
       return {
         label: 'Session deleted',
         description: title ? `"${title}" and its pool/attempts were removed.` : 'Session removed.',
-        labelClass: 'text-red-600',
-        dot: 'bg-red-500',
+        labelClass: 'text-danger',
+        dot: 'bg-danger',
       };
     case 'switch_active':
       return {
@@ -202,8 +203,8 @@ function describe(entry: ActivityEntry): MetaOut {
       return {
         label: 'Deactivated',
         description: 'Lost active status to a newer session in this program.',
-        labelClass: 'text-amber-700',
-        dot: 'bg-amber-500',
+        labelClass: 'text-warning',
+        dot: 'bg-warning',
       };
     case 'transcript_upload':
       return {

@@ -13,7 +13,7 @@ const TIER_COLORS: Record<string, string> = {
   newcomer:         'bg-border/40 text-ink-faint',
   contributor:      'bg-warning/10 text-warning',
   helper:           'bg-accent/10 text-accent',
-  expert:           'bg-yellow-400/10 text-yellow-400',
+  expert:           'bg-warning/15 text-warning',
   champion:         'bg-accent/10 text-accent',
   knowledge_master: 'bg-accent/10 text-accent',
 };

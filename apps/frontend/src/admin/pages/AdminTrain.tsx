@@ -274,7 +274,7 @@ export default function AdminTrain() {
               <CountCard
                 label="Document insights (pending)"
                 value={selectedStats.counts.documentInsightPending}
-                accent={selectedStats.counts.documentInsightPending > 0 ? 'text-amber-600' : 'text-ink-soft'}
+                accent={selectedStats.counts.documentInsightPending > 0 ? 'text-warning' : 'text-ink-soft'}
               />
               <CountCard
                 label="FAQs"
@@ -468,7 +468,7 @@ function HealthChip({
   to?: string;
 }) {
   const colorClass =
-    severity === 'warn' ? 'border-amber-500/40 bg-amber-500/5 text-amber-700' : 'border-border bg-card text-ink';
+    severity === 'warn' ? 'border-warning/30 bg-warning/5 text-warning' : 'border-border bg-card text-ink';
   const inner = (
     <div className="flex items-baseline gap-2">
       <span className="text-lg font-semibold tabular-nums">{value}</span>
