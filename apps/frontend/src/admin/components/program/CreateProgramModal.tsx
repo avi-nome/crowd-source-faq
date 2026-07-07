@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import adminApi from '../../utils/adminApi';
+import { inlineDangerBanner } from '../../../styles/style_config';
 
 interface CreatedBatch {
   _id: string;
@@ -178,7 +179,7 @@ export default function CreateProgramModal({ open, onClose, onCreated }: CreateP
               </div>
 
               {error && (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                <div className={inlineDangerBanner}>
                   {error}
                 </div>
               )}

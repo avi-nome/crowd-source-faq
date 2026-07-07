@@ -1,9 +1,14 @@
-import React, { useState, useRef, type FormEvent, type ChangeEvent } from 'react';
+import React, { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import api from '../../utils/api';
 import type { SearchResult } from '../../types/ui';
 import { useBatch } from '../../context/BatchContext';
+import {
+  searchInputCompact,
+  searchInputDefault,
+  searchSuggestionItem,
+} from '../../styles/style_config';
 
 interface Suggestion {
   _id: string;
@@ -52,6 +57,9 @@ const SearchBar = React.forwardRef<HTMLInputElement, SearchBarProps>(function Se
   const query = isControlled ? (value ?? '') : internalQuery;
   const suggestDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 1.6 — tracks the suggestionError auto-dismiss timer so we can
+  // clear it on the next click / unmount.
+  const suggestErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -141,14 +149,38 @@ const SearchBar = React.forwardRef<HTMLInputElement, SearchBarProps>(function Se
     setShowSuggestions(false);
     setSuggestions([]);
     setSuggestionError(null);
+    // 1.6 (LOW) — clear any stale suggestionError on every click so it
+    // doesn't linger indefinitely if the user stopped typing. The
+    // 4-second auto-dismiss below still applies for fresh errors.
+    if (suggestErrorTimerRef.current) {
+      clearTimeout(suggestErrorTimerRef.current);
+      suggestErrorTimerRef.current = null;
+    }
     try {
       const res = await api.get<{ _id: string; question: string; answer: string; category: string }>(`/faq/${faqId}`);
       sessionStorage.setItem('yaksha_faq_highlight', JSON.stringify(res.data));
     } catch {
+      // 1.6 (LOW) — auto-dismiss after 4 seconds so the red banner
+      // doesn't linger until the next fetchSuggestions cycle.
       setSuggestionError('Could not load FAQ. Navigating anyway.');
+      suggestErrorTimerRef.current = setTimeout(() => {
+        setSuggestionError(null);
+        suggestErrorTimerRef.current = null;
+      }, 4000);
     }
     navigate(`/faq/${faqId}`);
   };
+
+  // 1.6 — clear pending auto-dismiss timer on unmount so we don't
+  // try to setState after the component is gone.
+  useEffect(() => {
+    return () => {
+      if (suggestErrorTimerRef.current) {
+        clearTimeout(suggestErrorTimerRef.current);
+        suggestErrorTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Close suggestions on outside click
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -184,10 +216,7 @@ const SearchBar = React.forwardRef<HTMLInputElement, SearchBarProps>(function Se
           onFocus={onFocus}
           onBlur={handleBlur}
           placeholder={placeholder}
-          className={variant === 'compact' 
-            ? "w-full bg-mist border border-border/60 text-ink text-sm rounded-[14px] pl-10 pr-3 py-1.5 outline-none focus:bg-card focus:border-accent/40 focus:ring-2 focus:ring-accent/10 transition-all placeholder-ink-faint"
-            : "w-full pl-12 pr-32 py-5 sm:py-[22px] rounded-[26px] border border-border bg-card text-sm sm:text-base text-ink placeholder-ink-faint focus:outline-none focus:border-accent focus:bg-card transition-all duration-300 shadow-[0_14px_34px_rgba(31,41,51,0.07)]"
-          }
+          className={variant === 'compact' ? searchInputCompact : searchInputDefault}
           autoComplete="off"
         />
 
@@ -213,7 +242,7 @@ const SearchBar = React.forwardRef<HTMLInputElement, SearchBarProps>(function Se
                 key={s._id}
                 type="button"
                 onMouseDown={() => handleSuggestionClick(s._id)}
-                className="w-full text-left px-5 py-3.5 text-sm text-ink hover:bg-cream/60 transition-colors duration-150 border-b border-border/30 last:border-0 flex items-center gap-3"
+                className={searchSuggestionItem}
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-accent shrink-0">
                   <circle cx="5.5" cy="5.5" r="4" stroke="currentColor" strokeWidth="1.5"/>

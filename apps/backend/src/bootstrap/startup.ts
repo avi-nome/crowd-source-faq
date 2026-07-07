@@ -18,7 +18,13 @@ import { jobQueue } from '../utils/http/jobQueue.js';
 // Cron job handlers
 import { runPromotionCycle } from '../modules/program/promotion.service.js';
 import { runFreshnessCheck } from '../modules/faq/freshness.controller.js';
-import { clusterAllActiveBatches } from '../utils/ai/categoryClusterer.js';
+// Note: `clusterAllActiveBatches` (utils/ai/categoryClusterer.ts) is the v1.70
+// embedding-based clusterer. It called a local ONNX embedder that this
+// deployment doesn't have, which surfaced as a burst of
+// `[categoryClusterer] embed failed for X: Connection error` warnings on every
+// boot. The v1.71 LLM-based replacement (utils/ai/categoryAssigner.ts →
+// `recategorizeAllActiveBatches`) is registered below, gated by the
+// `categoryRecategorize` feature flag in /admin/features.
 import { recomputePopularity } from '../modules/faq/public-faq.controller.js';
 import { retryFailedMeetings } from '../modules/zoom/retry.service.js';
 import { runPromotePopularDocumentInsights } from '../modules/knowledge/document-promotion.controller.js';
@@ -113,14 +119,6 @@ export async function startup(config: any): Promise<void> {
     handler: () => notificationsService.drain(),
     intervalMs: 60_000,
     runOnStartup: false,
-  });
-
-  cronManager.register({
-    name: 'category-cluster',
-    handler: clusterAllActiveBatches,
-    intervalMs: config.cron.categoryClusterIntervalMs,
-    runOnStartup: true,
-    startupDelayMs: 15_000,
   });
 
   cronManager.register({
@@ -224,9 +222,13 @@ export async function startup(config: any): Promise<void> {
   // on the hot path — it degrades to text-only matching when the
   // vector search can't run (see `search.controller.ts`). Manual
   // trigger via `POST /csfaq/api/warm` still works.
+  // 7 * 24 * 60 * 60 * 1000 = weekly. The auto-answer pipeline is
+  // text-based and doesn't depend on fresh embeddings, so weekly is
+  // enough. If embedding infra ever comes back online, the warm pass
+  // catches up any docs that were written since the last tick.
   if (await featureFlags.isEnabled('embeddingWarmCron')) {
     const { embedUnprocessedKnowledge } = await import('../modules/knowledge/knowledge-base.service.js');
-    const embeddingWarmIntervalMs = 60 * 60 * 1000; // 1 hour
+    const embeddingWarmIntervalMs = 7 * 24 * 60 * 60 * 1000;
     cronManager.register({
       name: 'embedding-warm',
       handler: async () => {
@@ -273,6 +275,28 @@ export async function startup(config: any): Promise<void> {
     );
   } else {
     logger.info('[server] web auto-discover cron disabled (webAutoDiscover feature flag off)');
+  }
+
+  // v1.71 — LLM-based FAQ recategorize. Replaces the deprecated embedding
+  // clusterer above. Off by default; flip `categoryRecategorize` in
+  // /admin/features to enable. Mirrors the `webAutoDiscover` opt-in pattern:
+  // don't surprise the operator on first boot, don't run without an
+  // explicit acknowledgement that the LLM will rewrite `category` fields.
+  if (await featureFlags.isEnabled('categoryRecategorize')) {
+    const { recategorizeAllActiveBatches } = await import('../utils/ai/categoryAssigner.js');
+    const categoryRecategorizeIntervalMs = 2 * 24 * 60 * 60 * 1000; // 2 days
+    cronManager.register({
+      name: 'category-recategorize',
+      handler: () => recategorizeAllActiveBatches(),
+      intervalMs: categoryRecategorizeIntervalMs,
+      runOnStartup: false,
+      startupDelayMs: 30_000,
+    });
+    logger.info(
+      `[server] category-recategorize cron registered (every ${categoryRecategorizeIntervalMs / 1000}s, categoryRecategorize feature flag on)`,
+    );
+  } else {
+    logger.info('[server] category-recategorize cron disabled (categoryRecategorize feature flag off)');
   }
 
   // Start cron manager

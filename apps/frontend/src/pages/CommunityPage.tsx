@@ -11,8 +11,8 @@ import { useAuth } from '../hooks/useAuth';
 import { useAuthGate } from '../context/AuthModalContext';
 import type { Post } from '../types/ui';
 
-// Modular dialog components
 import CreatePostDialog from '../components/community/CreatePostDialog';
+import { buttonCommunityAsk } from '../styles/style_config';
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function CommunityPage() {
@@ -127,15 +127,37 @@ export default function CommunityPage() {
     }
   }, [posts, user, window.location.search]);
 
-  useEffect(() => {
-    fetchPosts(true);
-  }, [filter, sort, showAllPrograms]);
-
   // Reset cursor + posts when filter/sort changes so we paginate the
   // newly-filtered set from the beginning.
   useEffect(() => {
     setNextCursor(null);
     setPosts([]);
+  }, [filter, sort, showAllPrograms]);
+
+  // 2-D (MEDIUM) — previously this page had TWO effects both keyed on
+  // [filter, sort, ...] that each fired `fetchPosts(true)` in the same
+  // React commit, racing against each other. The earlier one (above)
+  // handled showAllPrograms, this one below handled the search-active
+  // branch. Merge them into one effect whose body is the union of
+  // both branches, removing the duplicate dispatch.
+  // When filter or sort changes — refresh posts (if no search active) or re-filter existing results
+  useEffect(() => {
+    if (search.trim()) {
+      // Search is active — re-apply filter/sort client-side to existing searchResults
+      setSearchResults(prev => {
+        if (!prev.length) return prev;
+        let filtered = [...prev];
+        if (filter === 'answered') filtered = filtered.filter(p => p.status === 'answered');
+        else if (filter === 'unanswered') filtered = filtered.filter(p => p.status === 'unanswered');
+        if (sort === 'newest') filtered.sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
+        else if (sort === 'oldest') filtered.sort((a, b) => new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime());
+        else if (sort === 'popular') filtered.sort((a, b) => ((b.upvotes?.length ?? 0)) - ((a.upvotes?.length ?? 0)));
+        else if (sort === 'discussed') filtered.sort((a, b) => ((b.comments?.length ?? 0)) - ((a.comments?.length ?? 0)));
+        return filtered;
+      });
+      return;
+    }
+    fetchPosts(true);
   }, [filter, sort, showAllPrograms]);
 
   // ── Infinite scroll — fetch the next page when the sentinel enters view ────
@@ -190,26 +212,6 @@ export default function CommunityPage() {
       setTimeout(() => setToast(''), 2500);
     }
   }, [loading, syncing]);
-
-  // When filter or sort changes — refresh posts (if no search active) or re-filter existing results
-  useEffect(() => {
-    if (search.trim()) {
-      // Search is active — re-apply filter/sort client-side to existing searchResults
-      setSearchResults(prev => {
-        if (!prev.length) return prev;
-        let filtered = [...prev];
-        if (filter === 'answered') filtered = filtered.filter(p => p.status === 'answered');
-        else if (filter === 'unanswered') filtered = filtered.filter(p => p.status === 'unanswered');
-        if (sort === 'newest') filtered.sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
-        else if (sort === 'oldest') filtered.sort((a, b) => new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime());
-        else if (sort === 'popular') filtered.sort((a, b) => ((b.upvotes?.length ?? 0)) - ((a.upvotes?.length ?? 0)));
-        else if (sort === 'discussed') filtered.sort((a, b) => ((b.comments?.length ?? 0)) - ((a.comments?.length ?? 0)));
-        return filtered;
-      });
-      return;
-    }
-    fetchPosts(true);
-  }, [filter, sort]);
 
   const handlePostCreated = (newPost: Post) => {
     setPosts((prev) => [newPost, ...prev]);
@@ -286,7 +288,7 @@ export default function CommunityPage() {
             <button
               id="ask-question-btn"
               onClick={handleAskQuestion}
-              className="btn-community-ask"
+              className={buttonCommunityAsk}
               aria-label="Ask a question"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -450,7 +452,7 @@ export default function CommunityPage() {
                 key={post._id}
                 post={post}
                 onClick={(p) => handleOpenThread(p._id)}
-                currentUserId={user?._id || (user?.id as string | undefined)}
+                currentUserId={user?._id}
               />
             ))}
           </div>
@@ -481,9 +483,13 @@ export default function CommunityPage() {
 
       <Footer />
 
-      {/* Thread detail — full-page overlay replaces the list view */}
+      {/* Thread detail — full-page overlay replaces the list view.
+          z-30 (below the navbar's z-50) so the navbar floats on top of
+          the page-cover background. The inner modal at z-[60] escapes
+          this stacking context via its higher z-index and sits above
+          the navbar. */}
       {selectedPostId && (
-        <div className="fixed inset-0 z-40 bg-bg overflow-y-auto">
+        <div className="fixed inset-0 z-30 bg-bg overflow-y-auto">
           <ThreadDetail
             postId={selectedPostId}
             onClose={handleCloseDetail}

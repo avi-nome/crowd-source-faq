@@ -64,6 +64,7 @@ const NAV: NavGroup[] = [
       { to: '/admin/zoom-meetings',  label: 'Zoom Meetings', icon: VideoIcon },
       { to: '/admin/document-insights', label: 'Document Insights', icon: DocIcon, featureFlag: 'documentPipeline' },
       { to: '/admin/context-sources', label: 'Context Sources', icon: LinkIcon },
+      { to: '/admin/train',          label: 'Train',         icon: SparkleIcon },
     ],
   },
   {

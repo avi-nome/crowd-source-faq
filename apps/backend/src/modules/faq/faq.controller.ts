@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import mongoose, { Types } from 'mongoose';
 import FAQ, { type IFAQ } from './faq.model.js';
 import CommunityPost from '../community/community-post.model.js';
-import { generateEmbedding, generateQueryEmbedding } from '../../utils/ai/embeddings.js';
+import { generateQueryEmbedding } from '../../utils/ai/embeddings.js';
 import { adminLog } from '../../utils/http/logger.js';
 import { invalidateCache } from '../../utils/http/cache.js';
 import { createTeaDropsForFAQ } from '../notification/tea-notification.controller.js';
@@ -347,8 +347,8 @@ export const createFAQ = async (req: Request, res: Response): Promise<void> => {
     const answer_ = sanitizeHtml(answer);
     const category_ = sanitizeHtml(category);
 
-    // Generate vector embedding for semantic search
-    const embedding = await generateEmbedding(`Section: ${category_}. Question: ${question_}. Answer: ${answer_}`);
+    // Skip live embedding on create. Weekly batch cron handles it offline.
+    // See apps/backend/src/utils/ai/embeddings.ts for context.
 
     const now = new Date();
     const tier = freshnessTier ?? 'evergreen';
@@ -363,7 +363,7 @@ export const createFAQ = async (req: Request, res: Response): Promise<void> => {
       answer: answer_,
       category: category_,
       batchId: new Types.ObjectId(batchId),
-      embedding,
+      // embedding omitted — assigned offline by weekly batch cron
       freshnessTier: tier,
       reviewIntervalDays: interval,
       reviewStatus: 'verified',
@@ -424,12 +424,7 @@ export const updateFAQ = async (req: Request<{ id: string }>, res: Response): Pr
       faq.status = status;
     }
 
-    // Recalculate embedding if any key field is updated
-    if (question || answer || category) {
-      faq.embedding = await generateEmbedding(
-        `Section: ${faq.category}. Question: ${faq.question}. Answer: ${faq.answer}`
-      );
-    }
+    // Embedding recalculation skipped — handled by weekly batch cron.
 
     // Admin edit while under review = re-verification
     if (faq.reviewStatus === 'pending_review' || faq.reviewStatus === 'update_requested') {

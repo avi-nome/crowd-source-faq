@@ -17,6 +17,7 @@ import { ContextFieldsDisplay } from '../../components/support/ContextFieldsDisp
 import type { SupportRequest, SupportStatus, SupportCategory } from '../../components/support/types';
 import Spinner from '../../components/ui/Spinner';
 import { friendlyError } from '../../utils/api';
+import { STATUS_STYLES, adminCardSurface, adminTextarea, adminBtnPrimary, adminBtnGhost, adminToastError, adminToastSuccess } from '../../styles/style_config';
 
 const STATUS_OPTIONS: SupportStatus[] = ['Pending', 'In Review', 'Resolved', 'Rejected'];
 
@@ -128,7 +129,14 @@ function AdminTicketInner(): React.ReactElement {
     if (!request || spCost === null) return;
     setConvertSending(true);
     try {
-      await adminApi.post(`/csfaq/api/support/requests/${request._id}/convert-to-golden`, { spCost, note: note.trim() });
+      // S3-02 (HIGH) fix: previously this URL was hardcoded to
+      // `/csfaq/api/...`, which bypasses the `adminApi.baseURL` config
+      // and breaks any deploy where the API isn't at `/csfaq/api`.
+      // Match the pattern used by every other admin file that hits
+      // support routes (e.g. ProgramSupportCategoriesTab): relative
+      // path `/support/...`; the adminApi instance prepends the
+      // baseURL.
+      await adminApi.post(`/support/requests/${request._id}/convert-to-golden`, { spCost, note: note.trim() });
       setSpCost(null);
       setNote('');
       await load();
@@ -224,14 +232,14 @@ function AdminTicketInner(): React.ReactElement {
                 <div className="flex gap-2 justify-end">
                   <button
                     type="button"
-                    className="admin-btn admin-btn-ghost text-xs"
+                    className={`${adminBtnGhost} text-xs`}
                     onClick={() => { setSpCost(null); setNote(''); }}
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
-                    className="admin-btn admin-btn-primary text-xs"
+                    className={`${adminBtnPrimary} text-xs`}
                     onClick={() => void doConvert()}
                     disabled={convertSending}
                   >
@@ -251,7 +259,7 @@ function AdminTicketInner(): React.ReactElement {
                 const ta = document.getElementById('admin-quick-reply-textarea') as HTMLTextAreaElement | null;
                 if (ta) setTimeout(() => ta.focus(), 250);
               }}
-              className="admin-btn-primary"
+              className={adminBtnPrimary}
             >
               Quick reply
             </button>
@@ -445,7 +453,7 @@ function AdminTicketInner(): React.ReactElement {
           thread so the admin can drop a follow-up without scrolling
           around. The header's "Quick reply" button scrolls + focuses
           this textarea; the Send button is the actual submit. */}
-      <div id="admin-quick-reply" className="admin-card-surface p-5">
+      <div id="admin-quick-reply" className={`${adminCardSurface} p-5`}>
         <p className="text-[10px] uppercase tracking-wider font-semibold text-ink-faint mb-2">
           Send a reply
         </p>
@@ -456,7 +464,7 @@ function AdminTicketInner(): React.ReactElement {
           rows={3}
           maxLength={2000}
           placeholder="Type your reply to the student. Doesn't change the ticket status."
-          className="admin-textarea w-full"
+          className={`${adminTextarea} w-full`}
         />
         <div className="flex items-center justify-between mt-2">
           <p className="text-[11px] text-ink-faint tabular-nums">
@@ -466,14 +474,14 @@ function AdminTicketInner(): React.ReactElement {
             type="button"
             onClick={handleSendQuickReply}
             disabled={!quickReply.trim() || quickSending}
-            className="admin-btn-primary"
+            className={adminBtnPrimary}
           >
             {quickSending ? 'Sending…' : 'Send reply'}
           </button>
         </div>
       </div>
       {request.statusHistory.length > 0 && (
-        <div className="admin-card-surface p-5">
+        <div className={`${adminCardSurface} p-5`}>
           <p className="text-[10px] uppercase tracking-wider font-semibold text-ink-faint mb-3">Status history</p>
           <ol className="space-y-2 text-xs">
             {request.statusHistory.map((h) => (
@@ -495,7 +503,7 @@ function AdminTicketInner(): React.ReactElement {
 }
 
 function Toast({ toast }: { toast: { msg: string; type: 'success' | 'error' } }): React.ReactElement {
-  const colour = toast.type === 'error' ? 'admin-toast-error' : 'admin-toast-success';
+  const colour = toast.type === 'error' ? adminToastError : adminToastSuccess;
   return (
     <motion.div
       initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
@@ -505,12 +513,7 @@ function Toast({ toast }: { toast: { msg: string; type: 'success' | 'error' } })
 }
 
 function statusStyle(s: SupportStatus): string {
-  switch (s) {
-    case 'Pending':   return 'bg-warning/15 text-warning border-warning/30';
-    case 'In Review': return 'bg-admin-blue/15 text-admin-blue border-admin-blue/30';
-    case 'Resolved':  return 'bg-success/15 text-success border-success/30';
-    case 'Rejected':  return 'bg-danger/15 text-danger border-danger/30';
-  }
+  return STATUS_STYLES[s] || '';
 }
 
 export default function AdminSupportTicket(): React.ReactElement {

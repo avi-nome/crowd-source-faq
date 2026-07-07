@@ -7,6 +7,7 @@ import searchRoutes from '../modules/search/search.routes.js';
 import adminRoutes from '../modules/admin/admin.routes.js';
 import adminAuditRoutes from '../modules/admin/admin-audit.routes.js';
 import adminAutoAnswerRoutes from '../modules/admin/admin-auto-answer.routes.js';
+import adminTrainRoutes from '../modules/admin/adminTrain.routes.js';
 import adminScheduleRoutes from '../modules/admin/admin-schedule.routes.js';
 import adminWebPagesRoutes from '../modules/admin/admin-web-pages.routes.js';
 import adminDocumentsRoutes from '../modules/admin/admin-documents.routes.js';
@@ -54,6 +55,7 @@ export function registerRoutes(app: Express): void {
   router.use('/search', searchRoutes);
   router.use('/admin', adminRoutes);
   router.use('/admin', adminAutoAnswerRoutes);
+  router.use('/admin', adminTrainRoutes);
   router.use('/admin/schedule', adminScheduleRoutes);
   router.use('/admin', adminWebPagesRoutes);
   router.use('/admin', adminDocumentsRoutes);
