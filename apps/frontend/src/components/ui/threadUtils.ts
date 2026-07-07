@@ -10,21 +10,23 @@ export const formatDate = (d: string | undefined) =>
     year: 'numeric',
   });
 
-// Reddit-style depth colors — each nesting level gets a distinct accent
+// Reddit-style depth colours — each nesting level gets the
+// same accent token at decreasing opacity so deeper replies are
+// visually de-emphasised without leaving the warm-sand palette.
 export const DEPTH_COLORS = [
   'border-accent',
   'border-accent/40',
-  'border-amber-400',
-  'border-rose-400',
-  'border-violet-400',
+  'border-accent/30',
+  'border-accent/20',
+  'border-accent/10',
 ];
 
 export const DEPTH_BARS = [
   'bg-accent',
-  'bg-accent',
-  'bg-amber-400',
-  'bg-rose-400',
-  'bg-violet-400',
+  'bg-accent/80',
+  'bg-accent/60',
+  'bg-accent/40',
+  'bg-accent/20',
 ];
 
 export const LIFECYCLE_CONFIG: Record<string, { label: string; cls: string }> = {

@@ -14,10 +14,10 @@ import { friendlyError } from '../utils/api';
 
 function statusStyles(status: string): { bg: string; text: string; label: string } {
   if (status === 'Resolved') return { bg: 'bg-accent/15', text: 'text-accent', label: 'Resolved' };
-  if (status === 'Rejected') return { bg: 'bg-rose-100', text: 'text-rose-800', label: 'Rejected' };
-  if (status === 'Pending' || status === 'open') return { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Pending' };
+  if (status === 'Rejected') return { bg: 'bg-danger/10', text: 'text-danger', label: 'Rejected' };
+  if (status === 'Pending' || status === 'open') return { bg: 'bg-warning/10', text: 'text-warning', label: 'Pending' };
   if (status === 'In Review') return { bg: 'bg-accent/15', text: 'text-accent', label: 'In Review' };
-  if (status === 'closed') return { bg: 'bg-stone-100', text: 'text-stone-700', label: 'Closed' };
+  if (status === 'closed') return { bg: 'bg-mist', text: 'text-ink-soft', label: 'Closed' };
   return { bg: 'bg-mist', text: 'text-ink-faint', label: status };
 }
 
@@ -61,7 +61,7 @@ function GoldenTicketDetailInner(): React.ReactElement {
   if (error) {
     return (
       <div className="max-w-md mx-auto mt-12 text-center">
-        <p className="text-sm text-rose-700">{error}</p>
+        <p className="text-sm text-danger">{error}</p>
         <Link to="/golden" className="inline-block mt-4 text-sm text-accent hover:underline">
           ← Back to Golden Ticket
         </Link>
@@ -89,7 +89,7 @@ function GoldenTicketDetailInner(): React.ReactElement {
         {/* Header card */}
         <div className="bg-card rounded-2xl border border-border p-5 mb-4">
           <div className="flex items-start gap-3">
-            <span className="shrink-0 w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-lg">
+            <span className="shrink-0 w-10 h-10 rounded-xl bg-warning/10 text-warning flex items-center justify-center text-lg">
               🎟️
             </span>
             <div className="flex-1 min-w-0">
@@ -97,7 +97,7 @@ function GoldenTicketDetailInner(): React.ReactElement {
                 <span className={`text-[10px] px-2 py-0.5 rounded font-semibold uppercase tracking-wider ${s.bg} ${s.text}`}>
                   {s.label}
                 </span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-700">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-warning/10 text-warning">
                   🎟️ {ticket.spCost} SP
                 </span>
                 {answers.length > 0 && (
@@ -118,18 +118,18 @@ function GoldenTicketDetailInner(): React.ReactElement {
 
         {/* Rejection reason */}
         {isRejected && ticket.rejectionReason && (
-          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 mb-4">
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-rose-800 mb-1">
+          <div className="bg-danger-light border border-danger/30 rounded-2xl p-4 mb-4">
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-danger mb-1">
               Rejection reason
             </p>
-            <p className="text-sm text-rose-900 whitespace-pre-line">{ticket.rejectionReason}</p>
+            <p className="text-sm text-danger whitespace-pre-line">{ticket.rejectionReason}</p>
           </div>
         )}
 
         {/* Pending / open state */}
         {inFlight && (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4">
-            <p className="text-sm text-amber-900">
+          <div className="bg-warning/10 border border-warning/30 rounded-2xl p-4 mb-4">
+            <p className="text-sm text-warning">
               Your ticket is still in the queue. You can track its status from the Escalation Queue on the{' '}
               <Link to="/golden" className="font-semibold underline">Golden Ticket page</Link>.
             </p>
