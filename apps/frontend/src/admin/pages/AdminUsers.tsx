@@ -1,9 +1,22 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react'
+import {
+  adminBtnDanger,
+  adminBtnOutline,
+  adminBtnPrimary,
+  adminBtnSmOutline,
+  adminBtnSuccess,
+  adminBtnWarn,
+  adminLabel,
+  adminSearchInput,
+  adminTextarea,
+  modalBackdrop,
+} from '../../styles/style_config';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import adminApi from '../utils/adminApi';
 import Badge from '../components/common/Badge';
 import { useDebounce } from '../../hooks/useDebounce';
+
 
 type UserRole = 'admin' | 'moderator' | 'user' | 'ai_moderator' | 'expert';
 interface AdminUser { _id: string; name: string; email: string; role: UserRole; createdAt: string; updatedAt: string; points?: number; reputation?: number; tier?: string; positiveBadges?: Array<{ badgeId: { _id: string; name: string; slug: string; icon: string; description: string }; awardedAt?: string; reason?: string }>; negativeBadges?: Array<{ badgeId: { _id: string; name: string; slug: string; icon: string }; awardedAt?: string; reason?: string }>; isBanned?: boolean; suspendedUntil?: string; }
@@ -53,7 +66,7 @@ function UserDetailModal({ user, onClose, onRefresh }: { user: AdminUser; onClos
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className={modalBackdrop} onClick={onClose}>
         <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-lg admin-modal-panel max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
           <div className="admin-modal-header shrink-0">
             <div className="flex items-center gap-3">
@@ -148,7 +161,7 @@ function UserDetailModal({ user, onClose, onRefresh }: { user: AdminUser; onClos
           {/* Action buttons */}
           <div className="admin-modal-footer shrink-0">
             {user.isBanned ? (
-              <button onClick={handleUnban} disabled={!!actionLoading} className="admin-btn-success px-3 py-1.5 text-xs">Unban</button>
+              <button onClick={handleUnban} disabled={!!actionLoading} className={`${adminBtnSuccess} px-3 py-1.5 text-xs`}>Unban</button>
             ) : (
               <>
                 <button onClick={() => setWarnModal(true)} disabled={!!actionLoading} className="px-3 py-1.5 rounded-md text-xs font-medium bg-mist text-ink-soft hover:bg-border/50 disabled:opacity-50 transition-colors">Warn</button>
@@ -160,7 +173,7 @@ function UserDetailModal({ user, onClose, onRefresh }: { user: AdminUser; onClos
               <button onClick={handleUnsuspend} disabled={!!actionLoading} className="px-3 py-1.5 rounded-md text-xs font-medium text-white bg-warning hover:bg-warning/80 disabled:opacity-50 transition-colors">Lift Suspension</button>
             )}
             <button onClick={handleSoftDelete} disabled={!!actionLoading || user.role === 'admin'} className="px-3 py-1.5 rounded-md text-xs text-danger border border-danger/30 hover:bg-danger/10 disabled:opacity-40 ml-auto transition-colors">Soft Delete</button>
-            <button onClick={onClose} className="px-3 py-1.5 rounded-md text-xs admin-btn-outline">Close</button>
+            <button onClick={onClose} className={`px-3 py-1.5 rounded-md text-xs ${adminBtnOutline}`}>Close</button>
           </div>
         </motion.div>
       </div>
@@ -172,12 +185,12 @@ function UserDetailModal({ user, onClose, onRefresh }: { user: AdminUser; onClos
             <div className="admin-modal-header"><p className="text-sm font-semibold text-ink">Send Warning to {user.name}</p></div>
             <div className="admin-modal-body space-y-3">
               <div>
-                <label className="admin-label">Reason</label>
-                <textarea rows={3} value={warnReason} onChange={e => setWarnReason(e.target.value)} placeholder="Describe the violation…" className="admin-textarea" />
+                <label className={`${adminLabel}`}>Reason</label>
+                <textarea rows={3} value={warnReason} onChange={e => setWarnReason(e.target.value)} placeholder="Describe the violation…" className={`${adminTextarea}`} />
               </div>
               <div className="flex gap-2 justify-end">
-                <button onClick={() => setWarnModal(false)} className="admin-btn-outline">Cancel</button>
-                <button onClick={handleWarn} disabled={!warnReason} className="admin-btn-primary">Send Warning</button>
+                <button onClick={() => setWarnModal(false)} className={`${adminBtnOutline}`}>Cancel</button>
+                <button onClick={handleWarn} disabled={!warnReason} className={`${adminBtnPrimary}`}>Send Warning</button>
               </div>
             </div>
           </div>
@@ -191,7 +204,7 @@ function UserDetailModal({ user, onClose, onRefresh }: { user: AdminUser; onClos
             <div className="admin-modal-header"><p className="text-sm font-semibold text-ink">Suspend {user.name}</p></div>
             <div className="admin-modal-body space-y-3">
               <div>
-                <label className="admin-label">Duration</label>
+                <label className={`${adminLabel}`}>Duration</label>
                 <div className="flex flex-wrap gap-1.5">
                   {['1h','6h','24h','3d','7d'].map(d => (
                     <button key={d} onClick={() => setSuspendDuration(d)}
@@ -200,12 +213,12 @@ function UserDetailModal({ user, onClose, onRefresh }: { user: AdminUser; onClos
                 </div>
               </div>
               <div>
-                <label className="admin-label">Reason</label>
-                <textarea rows={2} value={suspendReason} onChange={e => setSuspendReason(e.target.value)} placeholder="Reason…" className="admin-textarea" />
+                <label className={`${adminLabel}`}>Reason</label>
+                <textarea rows={2} value={suspendReason} onChange={e => setSuspendReason(e.target.value)} placeholder="Reason…" className={`${adminTextarea}`} />
               </div>
               <div className="flex gap-2 justify-end">
-                <button onClick={() => setSuspendModal(false)} className="admin-btn-outline">Cancel</button>
-                <button onClick={handleSuspend} disabled={!suspendReason} className="admin-btn-warn">Suspend</button>
+                <button onClick={() => setSuspendModal(false)} className={`${adminBtnOutline}`}>Cancel</button>
+                <button onClick={handleSuspend} disabled={!suspendReason} className={`${adminBtnWarn}`}>Suspend</button>
               </div>
             </div>
           </div>
@@ -220,12 +233,12 @@ function UserDetailModal({ user, onClose, onRefresh }: { user: AdminUser; onClos
             <div className="admin-modal-body space-y-3">
               <p className="text-xs text-ink-faint">This user will be permanently banned and cannot access their account.</p>
               <div>
-                <label className="admin-label">Reason (required)</label>
-                <textarea rows={3} value={banReason} onChange={e => setBanReason(e.target.value)} placeholder="Detailed reason…" className="admin-textarea" />
+                <label className={`${adminLabel}`}>Reason (required)</label>
+                <textarea rows={3} value={banReason} onChange={e => setBanReason(e.target.value)} placeholder="Detailed reason…" className={`${adminTextarea}`} />
               </div>
               <div className="flex gap-2 justify-end">
-                <button onClick={() => setBanModal(false)} className="admin-btn-outline">Cancel</button>
-                <button onClick={handleBan} disabled={!banReason} className="admin-btn-danger">Ban User</button>
+                <button onClick={() => setBanModal(false)} className={`${adminBtnOutline}`}>Cancel</button>
+                <button onClick={handleBan} disabled={!banReason} className={`${adminBtnDanger}`}>Ban User</button>
               </div>
             </div>
           </div>
@@ -243,7 +256,7 @@ function RoleModal({ user, onClose, onUpdated }: { user: AdminUser; onClose: () 
   const [error, setError] = useState('');
   const handleSave = async () => { if (role === user.role) { onClose(); return; } setLoading(true); setError(''); try { const res = await adminApi.patch<{ user: AdminUser }>(`/auth/users/${user._id}/role`, { role }); onUpdated({ ...user, role: res.data.user.role }); onClose(); } catch (err) { setError(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) ?? 'Failed'); } finally { setLoading(false); } };
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className={modalBackdrop} onClick={e => e.target === e.currentTarget && onClose()}>
       <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm admin-modal-panel">
         <div className="admin-modal-header">
           <p className="text-sm font-semibold text-ink">Change Role</p>
@@ -259,8 +272,8 @@ function RoleModal({ user, onClose, onUpdated }: { user: AdminUser; onClose: () 
         </div>
         {error && <p className="px-5 pb-2 text-xs text-danger">{error}</p>}
         <div className="admin-modal-footer">
-          <button onClick={onClose} disabled={loading} className="flex-1 py-2 rounded-lg text-sm admin-btn-outline">Cancel</button>
-          <button onClick={handleSave} disabled={loading || role === user.role} className="flex-1 py-2 rounded-lg text-sm font-medium admin-btn-primary">{loading ? 'Saving…' : 'Save'}</button>
+          <button onClick={onClose} disabled={loading} className={`flex-1 py-2 rounded-lg text-sm ${adminBtnOutline}`}>Cancel</button>
+          <button onClick={handleSave} disabled={loading || role === user.role} className={`flex-1 py-2 rounded-lg text-sm font-medium ${adminBtnPrimary}`}>{loading ? 'Saving…' : 'Save'}</button>
         </div>
       </motion.div>
     </div>
@@ -274,7 +287,7 @@ function DeleteModal({ user, onClose, onDeleted }: { user: AdminUser; onClose: (
   const [error, setError] = useState('');
   const handleDelete = async () => { setLoading(true); setError(''); try { await adminApi.delete(`/auth/users/${user._id}`); onDeleted(user._id); onClose(); } catch (err) { setError(((err as { response?: { data?: { message?: string } } })?.response?.data?.message) ?? 'Failed'); } finally { setLoading(false); } };
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className={modalBackdrop} onClick={e => e.target === e.currentTarget && onClose()}>
       <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-xs admin-modal-panel">
         <div className="admin-modal-body">
           <p className="text-sm font-semibold text-ink">Delete User</p>
@@ -282,8 +295,8 @@ function DeleteModal({ user, onClose, onDeleted }: { user: AdminUser; onClose: (
         </div>
         {error && <p className="px-5 pb-2 text-xs text-danger">{error}</p>}
         <div className="admin-modal-footer">
-          <button onClick={onClose} disabled={loading} className="flex-1 py-2 rounded-lg text-sm admin-btn-outline transition-colors">Cancel</button>
-          <button onClick={handleDelete} disabled={loading} className="flex-1 py-2 rounded-lg text-sm font-medium admin-btn-danger transition-colors">{loading ? 'Deleting…' : 'Delete'}</button>
+          <button onClick={onClose} disabled={loading} className={`flex-1 py-2 rounded-lg text-sm ${adminBtnOutline} transition-colors`}>Cancel</button>
+          <button onClick={handleDelete} disabled={loading} className={`flex-1 py-2 rounded-lg text-sm font-medium ${adminBtnDanger} transition-colors`}>{loading ? 'Deleting…' : 'Delete'}</button>
         </div>
       </motion.div>
     </div>
@@ -327,7 +340,7 @@ export default function AdminUsers() {
 
       <div className="relative max-w-xs">
         <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" placeholder="Search users…" value={search} onChange={e => setSearch(e.target.value)} className="admin-search-input" />
+        <input type="text" placeholder="Search users…" value={search} onChange={e => setSearch(e.target.value)} className={`${adminSearchInput}`} />
       </div>
 
       <div className="admin-table-wrap">
@@ -349,8 +362,8 @@ export default function AdminUsers() {
                   <td className="admin-td"><Badge status={u.role === 'admin' ? 'admin' : u.role === 'moderator' ? 'moderator' : 'user'} label={u.role} /></td>
                   <td className="admin-td text-ink-faint">{new Date(u.createdAt).toLocaleDateString('en-IN')}</td>
                   <td className="admin-td text-right">
-                    <button onClick={() => setDetailUser(u)} className="admin-btn-sm-outline mr-1">Detail</button>
-                    <button onClick={() => setEditUser(u)} className="admin-btn-sm-outline mr-1">Edit</button>
+                    <button onClick={() => setDetailUser(u)} className={`${adminBtnSmOutline} mr-1`}>Detail</button>
+                    <button onClick={() => setEditUser(u)} className={`${adminBtnSmOutline} mr-1`}>Edit</button>
                     <button onClick={() => setDeleteUser(u)} className="px-2.5 py-1 rounded-md text-[10px] text-ink-faint hover:text-danger hover:bg-danger/10 transition-colors">Delete</button>
                   </td>
                 </tr>

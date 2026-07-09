@@ -53,6 +53,11 @@ export interface AiApiUsageFailure extends AiApiCallContext {
   error: string;
   status?: number;
   errorKind?: string;
+  /** Outgoing request body that the upstream rejected — persisted to
+   *  the AiApiCall doc so admins can diagnose schema mismatches with
+   *  custom / proxied providers (e.g. field-name renames done by an
+   *  in-house relay). Capped at 2KB to keep audit rows small. */
+  requestBody?: unknown;
 }
 
 export function logAiApiSuccess(usage: AiApiUsageSuccess): void {
@@ -120,6 +125,15 @@ export function logAiApiFailure(usage: AiApiUsageFailure): void {
     meta,
   );
 
+  if (usage.requestBody !== undefined) {
+    try {
+      const s = JSON.stringify(usage.requestBody);
+      meta.requestBody = s.length > 2000 ? s.slice(0, 2000) + '…' : s;
+    } catch {
+      meta.requestBody = '[unstringifiable]';
+    }
+  }
+
   void persistCall({
     kind: usage.kind,
     status: 'fail',
@@ -130,12 +144,27 @@ export function logAiApiFailure(usage: AiApiUsageFailure): void {
     httpStatus: usage.status,
     error: usage.error,
     errorKind: usage.errorKind ?? classifyError(usage.error, usage.status),
+    requestBody: stringifyBody(usage.requestBody),
     batchId: usage.batchId,
     userId: usage.userId,
     userEmail: usage.userEmail,
     userRole: usage.userRole,
     requestId: usage.requestId,
   });
+}
+
+/**
+ * Safely stringify an arbitrary value (e.g. an outgoing fetch body) for
+ * storage. Returns undefined when there's nothing to store so the
+ * `requestBody?: string` column stays sparse instead of holding `null`.
+ */
+function stringifyBody(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  try {
+    return JSON.stringify(value).slice(0, 2000);
+  } catch {
+    return undefined;
+  }
 }
 
 function classifyError(errorMessage: string, httpStatus?: number): string {
@@ -163,6 +192,7 @@ interface PersistArgs {
   httpStatus?: number;
   error?: string;
   errorKind?: string;
+  requestBody?: string;
   batchId?: string | Types.ObjectId | null;
   userId?: string | Types.ObjectId | null;
   userEmail?: string;
@@ -189,6 +219,7 @@ async function persistCall(args: PersistArgs): Promise<void> {
       httpStatus: args.httpStatus,
       error: args.error ? String(args.error).slice(0, 500) : undefined,
       errorKind: args.errorKind,
+      requestBody: args.requestBody,
       batchId: batchId ? toObjectId(batchId) : null,
       userId: userId ? toObjectId(userId) : null,
       userEmail: args.userEmail,

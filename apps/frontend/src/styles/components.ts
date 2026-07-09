@@ -63,12 +63,19 @@ export const searchInputCompact = 'w-full bg-mist border border-border/60 text-i
 
 export const searchSuggestionItem = 'w-full text-left px-5 py-3.5 text-sm text-ink hover:bg-cream/60 transition-colors duration-150 border-b border-border/30 last:border-0 flex items-center gap-3';
 
-export const searchPanel             = 'search-panel';             /* CSS class — already theme-driven */
+/* ── Search dropdown panel + items ──────────────────────────────
+ * Replaces the .search-panel / .search-list-item / .search-skeleton
+ * CSS classes that lived in index.css before the styles refactor.
+ * The Tailwind strings here reproduce the same glassmorphism look
+ * using theme tokens (bg-card, accent, border) so the panel re-skins
+ * automatically with the rest of the site. */
+export const searchPanel             = 'bg-card/85 backdrop-blur-[20px] border border-border rounded-2xl shadow-[0_20px_50px_rgb(var(--text-primary-rgb)/0.14)] bg-[linear-gradient(135deg,rgb(var(--accent-rgb)/0.06),rgb(var(--bg-card-rgb)/0.6))] dark:bg-card/60 dark:border-white/10 dark:shadow-[0_20px_60px_rgba(0,0,0,0.6)] dark:bg-[linear-gradient(135deg,rgb(var(--accent-rgb)/0.06),rgba(0,0,0,0.2))]';
+export const searchPanelGlow         = 'shadow-[0_14px_34px_rgb(31,41,51,0.07)] focus-within:shadow-[0_0_0_4px_rgb(var(--accent-rgb)/0.18),0_14px_34px_rgb(31,41,51,0.10)] dark:shadow-[0_14px_34px_rgba(0,0,0,0.4)]';
 export const searchPanelHeader       = 'flex items-center justify-between px-4 pt-4 pb-2';
-export const searchPanelLoadingSkeleton = 'h-[72px] rounded-2xl search-skeleton animate-pulse';
+export const searchPanelLoadingSkeleton = 'h-[72px] rounded-2xl bg-card/50 border border-border animate-pulse dark:bg-white/[0.04] dark:border-white/[0.06]';
 export const searchPanelListEmpty    = 'rounded-2xl border border-dashed border-border bg-transparent p-4';
-export const searchListItemDefault   = 'w-full text-left rounded-2xl border border-border/60 px-3 py-2 search-list-item';
-export const searchListItemCompact   = 'w-full flex items-center gap-2 px-3 py-2 rounded-2xl border border-border/60 text-left search-list-item';
+export const searchListItemDefault   = 'w-full text-left rounded-2xl border border-transparent bg-card hover:bg-card-hover hover:border-border/60 px-3 py-2 transition-colors text-ink';
+export const searchListItemCompact   = 'w-full flex items-center gap-2 px-3 py-2 rounded-2xl border border-transparent text-left bg-card hover:bg-card-hover hover:border-border/60 transition-colors text-ink';
 export const searchListItemQuestionRow = 'text-sm font-semibold text-ink line-clamp-2';
 export const searchListItemResultBody = 'text-xs text-ink-soft line-clamp-3 mt-1 leading-relaxed';
 
@@ -256,6 +263,34 @@ export const navMobileLinkActive  = 'bg-accent/10 text-accent';
 export const navMobileLinkIdle    = 'text-ink-soft hover:text-ink hover:bg-black/[0.03]';
 export const navMobileLinkBase    = 'block px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200';
 export const navSecondaryLinkBase = 'block px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200';
+
+/* ── Glass / floating-panel patterns ────────────────────────────
+ * Used by the top floating header pill (resting + scrolled state),
+ * the profile dropdown panel, and the mobile sheet. All four share
+ * the same blur/border/shadow skeleton, varying only the background
+ * alpha and shadow strength. Centralised here so the glassmorphism
+ * language stays consistent and any future re-skin is a single
+ * edit. */
+export const navbarGlassResting  = 'bg-[rgb(var(--bg-card-rgb)_/_0.4)] backdrop-blur-[12px] border border-[rgb(var(--border-rgb)_/_0.2)] shadow-[0_4px_20px_rgba(0,0,0,0.03)]';
+export const navbarGlass         = 'bg-[rgb(var(--bg-card-rgb)_/_0.75)] backdrop-blur-[24px] saturate-[1.5] border border-[rgb(var(--border-rgb)_/_0.5)] shadow-[0_8px_30px_rgba(0,0,0,0.08)]';
+export const glassPanelStrong    = 'bg-[rgb(var(--bg-card-rgb)_/_0.85)] backdrop-blur-[24px] border border-[rgb(var(--border-rgb)_/_0.5)] shadow-[0_8px_30px_rgba(0,0,0,0.12)]';
+export const mobileSheetPanel    = 'bg-[rgb(var(--bg-card-rgb)_/_0.95)] backdrop-blur-[20px] border border-[rgb(var(--border-rgb)_/_0.5)] shadow-[0_8px_30px_rgba(0,0,0,0.12)]';
+
+/* Hover/separator row inside floating dropdowns. The previous
+ * hand-rolled 'border-[rgb(var(--border-rgb)_/_0.3)]' string was
+ * missing a closing ')' and emitted no CSS — extracted here to
+ * fix the bug and lock in the intended 0.3 alpha. */
+export const dropdownRowDivider  = 'border-[rgb(var(--border-rgb)_/_0.3)]';
+
+/* Three-button theme picker (light/dark/system) shown inside the
+ * profile dropdown. The base, idle, and active states are identical
+ * across all three buttons, so they're extracted here. */
+export const themePickerButtonBase = 'flex-1 flex flex-col items-center justify-center gap-1 py-1.5 text-[10px] font-medium rounded-md transition-colors';
+export const themePickerActive     = 'bg-card text-ink shadow-sm';
+export const themePickerIdle       = 'text-ink-soft hover:text-ink';
+
+/* Shared hover background for floating-glass dropdown items. */
+export const dropdownRowHover      = 'hover:bg-[rgb(var(--bg-card-rgb)_/_0.5)] hover:text-ink';
 
 /* ── Navbar / pill patterns ─────────────────────────────────── */
 export const navPill         = 'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium text-ink-soft transition-colors hover:text-ink hover:bg-mist';

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react'
+import { adminBtnDanger, adminBtnSuccess } from '../../styles/style_config';
 import adminApi from '../utils/adminApi';
 import { timeAgo } from '../../utils/time';
 
@@ -85,7 +86,11 @@ function InsightCardSkeleton() {
   );
 }
 
-export default function AdminZoomInsights() {
+/**
+ * Named export — the inner tab content. Re-used by the unified
+ * `/admin/knowledge` tab page.
+ */
+export function ZoomInsightsView() {
   const [insights, setInsights] = useState<ZoomInsight[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -287,14 +292,14 @@ export default function AdminZoomInsights() {
                       <button
                         onClick={() => handleAction(insight._id, 'approve')}
                         disabled={actionLoading === insight._id}
-                        className="admin-btn-success text-xs px-3 py-1.5"
+                        className={`${adminBtnSuccess} text-xs px-3 py-1.5`}
                       >
                         Approve
                       </button>
                       <button
                         onClick={() => handleAction(insight._id, 'reject')}
                         disabled={actionLoading === insight._id}
-                        className="admin-btn-danger text-xs px-3 py-1.5"
+                        className={`${adminBtnDanger} text-xs px-3 py-1.5`}
                       >
                         Reject
                       </button>
@@ -333,4 +338,12 @@ export default function AdminZoomInsights() {
       )}
     </div>
   );
+}
+
+/**
+ * Default export kept for the legacy `/admin/zoom-insights` route —
+ * thin wrapper. Can be deleted once that route is removed.
+ */
+export default function AdminZoomInsights() {
+  return <ZoomInsightsView />;
 }

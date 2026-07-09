@@ -135,7 +135,7 @@ export default function WelcomePackagePage() {
         <HomeDoodles />
       </div>
 
-      <div className="pt-28 sm:pt-32 pb-20 px-4 sm:px-6 max-w-[1200px] mx-auto relative z-10">
+      <div className="pt-20 sm:pt-24 pb-20 px-4 sm:px-6 max-w-[1200px] mx-auto relative z-10">
 
         <div className="mb-8">
           <Link to="/" className="inline-flex items-center gap-2 text-sm font-medium text-ink-soft hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-lg px-3 py-1.5 -ml-3">

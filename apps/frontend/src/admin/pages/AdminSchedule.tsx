@@ -14,7 +14,8 @@
  * status changes without refreshing the page.
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react'
+import { adminBtnPrimary, adminBtnSecondary, adminInput } from '../../styles/style_config';
 import { AnimatePresence, motion } from 'framer-motion';
 import adminApi from '../utils/adminApi';
 
@@ -143,6 +144,17 @@ function KindBadge({ kind }: { kind: ScheduledProcess['kind'] }): React.ReactEle
   );
 }
 
+interface TriggerReceipt {
+  /** Id of the process we triggered. */
+  id: string;
+  /** When we fired (Date.now()). */
+  at: number;
+  /** 'success' or 'error' — what the toast tells the admin. */
+  kind: 'success' | 'error';
+  /** Short human-readable summary for the inline badge. */
+  summary: string;
+}
+
 export default function AdminSchedule(): React.ReactElement {
   const [data, setData] = useState<ScheduleResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -154,6 +166,27 @@ export default function AdminSchedule(): React.ReactElement {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingInterval, setEditingInterval] = useState<string>('');
   const [historyFor, setHistoryFor] = useState<string | null>(null);
+  // v1.81 — per-row trigger receipts. The bottom-right toast is easy
+  // to miss (auto-dismisses in 3.5s), so we ALSO paint a sticky
+  // badge on the row that just fired, showing success/error + a
+  // short summary. Auto-clears after 12s so the table doesn't grow
+  // stale; persists across re-renders so a 5s background refresh
+  // doesn't wipe it.
+  const [receipts, setReceipts] = useState<Record<string, TriggerReceipt>>({});
+
+  const clearReceipt = useCallback((id: string) => {
+    setReceipts((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
+
+  const setReceipt = useCallback((r: TriggerReceipt) => {
+    setReceipts((prev) => ({ ...prev, [r.id]: r }));
+    setTimeout(() => clearReceipt(r.id), 12_000);
+  }, [clearReceipt]);
 
   const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
@@ -178,18 +211,103 @@ export default function AdminSchedule(): React.ReactElement {
     return () => clearInterval(interval);
   }, [refresh]);
 
+  // v1.80 — surface the actual run outcome in the toast. Previously
+  // the toast was hard-coded to "Triggered <id>" and ignored the
+  // backend's response body, so a 200 with { ok:false, message:… }
+  // or a 409 with the failing error looked identical to a clean
+  // success. Now we read `data.message` or the HTTP error body and
+  // show "+N ms" timing so the admin sees the run actually
+  // completed (or failed with a reason).
+  //
+  // v1.80.1 — also show the handler's structured `output` when the
+  // backend returns it (e.g. autoAnswerBatch returns
+  // `{processed:0,approved:0,…}` so the admin sees "0 posts
+  // found" instead of generic "Triggered").
   const trigger = useCallback(async (id: string) => {
     setTriggering(id);
+    const t0 = Date.now();
     try {
-      await adminApi.post(`/admin/schedule/${encodeURIComponent(id)}/trigger`);
-      showToast(`Triggered ${id}`, 'success');
+      const res = await adminApi.post<{
+        ok: boolean;
+        message?: string;
+        output?: unknown;
+        durationMs?: number | null;
+      }>(`/admin/schedule/${encodeURIComponent(id)}/trigger`);
+      const elapsed = Date.now() - t0;
+      const output = res.data?.output;
+      const summary = output ? summariseCronOutput(id, output) : null;
+      const detail = summary
+        ? ` — ${summary}`
+        : (res.data?.message && res.data.message !== `Triggered "${id}"` ? ` — ${res.data.message}` : '');
+      const msg =
+        `Triggered ${id} in ${elapsed}ms${detail}` +
+        (res.data?.durationMs != null ? ` (server: ${res.data.durationMs}ms)` : '');
+      showToast(msg, 'success');
+      // Sticky row badge — survives the toast fading so the admin can
+      // see "what happened with this click" without squinting at the
+      // corner. Auto-clears after 12s.
+      setReceipt({
+        id,
+        at: Date.now(),
+        kind: 'success',
+        summary: summary || `OK in ${elapsed}ms`,
+      });
       void refresh();
     } catch (e: any) {
-      showToast(e?.response?.data?.message || 'Trigger failed', 'error');
+      const elapsed = Date.now() - t0;
+      const status = e?.response?.status;
+      const body = e?.response?.data?.message || e?.message || 'Trigger failed';
+      const errMsg =
+        `Trigger FAILED for ${id} after ${elapsed}ms${status ? ` (HTTP ${status})` : ''}: ${body}`;
+      showToast(errMsg, 'error');
+      setReceipt({
+        id,
+        at: Date.now(),
+        kind: 'error',
+        summary: `FAILED${status ? ` HTTP ${status}` : ''}: ${body.slice(0, 80)}`,
+      });
+      void refresh();
     } finally {
       setTriggering(null);
     }
-  }, [refresh, showToast]);
+  }, [refresh, showToast, setReceipt]);
+
+  // v1.80.1 — per-cron output summarisers. Each cron returns its
+  // own shape; surface what's most informative. Falls back to a
+  // generic JSON dump if no summary is registered.
+  function summariseCronOutput(id: string, output: unknown): string | null {
+    if (output == null || typeof output !== 'object') return null;
+    const o = output as Record<string, unknown>;
+    switch (id) {
+      case 'auto-answer-batch': {
+        const processed = o.processed ?? 0;
+        const approved = o.approved ?? 0;
+        const suggested = o.suggested ?? 0;
+        const escalated = o.escalated ?? 0;
+        const errors = o.errors ?? 0;
+        if (processed === 0) return 'no pending posts to process';
+        return `processed ${processed} (approved ${approved}, suggested ${suggested}, escalated ${escalated}${errors ? `, errors ${errors}` : ''})`;
+      }
+      case 'embedding-warm': {
+        const count = (o as { count?: number }).count ?? 0;
+        return count === 0 ? 'no knowledge entries needed backfill' : `embedded ${count} entries`;
+      }
+      case 'popularity-recompute': {
+        const count = (o as { count?: number }).count ?? 0;
+        return `recomputed popularity for ${count} FAQ${count === 1 ? '' : 's'}`;
+      }
+      case 'freshness-check': {
+        const flagged = (o as { flagged?: number }).flagged ?? 0;
+        return flagged === 0 ? 'no FAQs due for review' : `flagged ${flagged} FAQ${flagged === 1 ? '' : 's'} for review`;
+      }
+      case 'promotion-cycle': {
+        const promoted = (o as { promoted?: number }).promoted ?? 0;
+        return promoted === 0 ? 'nothing eligible to promote' : `promoted ${promoted} post${promoted === 1 ? '' : 's'}`;
+      }
+      default:
+        return null; // generic fallback uses the JSON dump in the message
+    }
+  }
 
   const toggleEnabled = useCallback(async (id: string, currentlyEnabled: boolean) => {
     try {
@@ -241,7 +359,7 @@ export default function AdminSchedule(): React.ReactElement {
     return (
       <div className="admin-card-surface p-6">
         <p className="text-danger">Error loading schedule: {error}</p>
-        <button type="button" onClick={refresh} className="mt-3 admin-btn-secondary px-3 py-1.5 text-xs">Retry</button>
+        <button type="button" onClick={refresh} className={`mt-3 ${adminBtnSecondary} px-3 py-1.5 text-xs`}>Retry</button>
       </div>
     );
   }
@@ -291,7 +409,7 @@ export default function AdminSchedule(): React.ReactElement {
             placeholder="Search by name or description…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="admin-input text-sm flex-1 min-w-[200px]"
+            className={`${adminInput} text-sm flex-1 min-w-[200px]`}
           />
           <div className="flex gap-1.5 text-xs">
             {(['all', 'cron', 'overridden', 'erroring', 'running'] as const).map((f) => (
@@ -389,17 +507,17 @@ export default function AdminSchedule(): React.ReactElement {
                             }}
                             placeholder="5m, 2h, 1d, default"
                             autoFocus
-                            className="admin-input text-xs w-24 font-mono"
+                            className={`${adminInput} text-xs w-24 font-mono`}
                           />
                           <button
                             type="button"
                             onClick={() => void saveInterval(p.id, editingInterval)}
-                            className="admin-btn-primary px-2 py-0.5 text-[10px]"
+                            className={`${adminBtnPrimary} px-2 py-0.5 text-[10px]`}
                           >Save</button>
                           <button
                             type="button"
                             onClick={() => setEditingId(null)}
-                            className="admin-btn-secondary px-2 py-0.5 text-[10px]"
+                            className={`${adminBtnSecondary} px-2 py-0.5 text-[10px]`}
                           >Cancel</button>
                         </div>
                       ) : (
@@ -445,7 +563,7 @@ export default function AdminSchedule(): React.ReactElement {
                         <button
                           type="button"
                           onClick={() => setHistoryFor(p.id)}
-                          className="admin-btn-secondary px-2 py-1 text-[10px]"
+                          className={`${adminBtnSecondary} px-2 py-1 text-[10px]`}
                           title="View run history"
                         >
                           History
@@ -455,7 +573,7 @@ export default function AdminSchedule(): React.ReactElement {
                         <button
                           type="button"
                           onClick={() => void resetOverride(p.id)}
-                          className="admin-btn-secondary px-2 py-1 text-[10px] text-warning"
+                          className={`${adminBtnSecondary} px-2 py-1 text-[10px] text-warning`}
                           title="Reset to registered defaults"
                         >
                           Reset
@@ -466,7 +584,7 @@ export default function AdminSchedule(): React.ReactElement {
                           type="button"
                           onClick={() => void trigger(p.id)}
                           disabled={triggering === p.id || p.isRunning}
-                          className="admin-btn-secondary px-2 py-1 text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
+                          className={`${adminBtnSecondary} px-2 py-1 text-[10px] disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
                           {triggering === p.id ? 'Running…' : p.isRunning ? 'In flight' : 'Run now'}
                         </button>
@@ -476,6 +594,22 @@ export default function AdminSchedule(): React.ReactElement {
                         </span>
                       )}
                     </div>
+                    {receipts[p.id] && (
+                      <button
+                        type="button"
+                        onClick={() => clearReceipt(p.id)}
+                        title="Dismiss"
+                        className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                          receipts[p.id]!.kind === 'success'
+                            ? 'admin-toast-success border-success/40'
+                            : 'admin-toast-error border-danger/40'
+                        }`}
+                      >
+                        <span aria-hidden="true">{receipts[p.id]!.kind === 'success' ? '✓' : '✕'}</span>
+                        <span className="max-w-[260px] truncate">{receipts[p.id]!.summary}</span>
+                        <span className="opacity-60">×</span>
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -583,14 +717,14 @@ function HistoryDrawer({ jobId, onClose }: { jobId: string; onClose: () => void 
               type="button"
               onClick={clear}
               disabled={clearing || runs.length === 0}
-              className="admin-btn-secondary px-3 py-1.5 text-xs text-danger disabled:opacity-50"
+              className={`${adminBtnSecondary} px-3 py-1.5 text-xs text-danger disabled:opacity-50`}
             >
               {clearing ? 'Clearing…' : 'Clear history'}
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="admin-btn-secondary px-3 py-1.5 text-xs"
+              className={`${adminBtnSecondary} px-3 py-1.5 text-xs`}
             >
               Close
             </button>

@@ -27,6 +27,7 @@ export const adminLabel           = 'block text-xs font-medium text-ink-soft mb-
 
 /* ── Admin Buttons ──────────────────────────────────────────────── */
 export const adminBtnPrimary      = 'px-4 py-2 rounded-md text-sm font-medium bg-accent text-accent-text hover:bg-accent-hover disabled:opacity-40 transition-colors';
+export const adminBtnSecondary    = 'px-4 py-2 rounded-md text-sm font-medium bg-bg-secondary text-ink border border-border hover:bg-mist disabled:opacity-40 transition-colors';
 export const adminBtnGhost        = 'px-4 py-2 rounded-md text-sm text-ink-faint hover:text-ink hover:bg-mist transition-colors';
 export const adminBtnOutline      = 'px-4 py-2 rounded-md text-sm border border-border text-ink-soft hover:bg-mist disabled:opacity-40 transition-colors';
 export const adminBtnDanger       = 'px-4 py-2 rounded-md text-sm font-medium text-white bg-danger hover:bg-danger/80 disabled:opacity-40 transition-colors';
@@ -37,3 +38,41 @@ export const adminBtnSmOutline    = 'px-2.5 py-1 rounded-md text-[10px] border b
 /* ── Community Buttons ──────────────────────────────────────────── */
 export const buttonCommunityAsk   = 'inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-xl text-[13px] font-medium bg-accent/14 border border-accent/30 text-accent transition-all duration-200 hover:bg-accent/18 hover:border-accent/40 hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgb(var(--accent-rgb)/0.15)] active:translate-y-0 active:bg-accent/14 dark:bg-accent/10 dark:border-accent/25 dark:hover:bg-accent/15 dark:hover:border-accent/40 dark:hover:text-accent-hover dark:hover:shadow-[0_0_20px_rgb(var(--accent-rgb)/0.15)] dark:active:bg-accent/12 dark:active:shadow-[0_0_8px_rgb(var(--accent-rgb)/0.10)]';
 
+
+/* ── Form inputs ──────────────────────────────────────────────────
+ * The standard text input used by admin forms (rule, w-full, etc.)
+ * — promoted because 8+ files were inlining the same 8 utility
+ * classes. If a second-input style appears, add a sibling export
+ * (inputReadOnly, inputError, etc.) rather than overloading this. */
+export const inputStandard       = 'w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-ink focus:outline-none focus:border-accent transition-all';
+
+/* ── Form input (with focus ring) ────────────────────────────────
+ * Variant for forms that want a visible focus-ring affordance in
+ * addition to the border-color change. AdminProjectsPage uses this
+ * across 10+ fields. Keep the base classes (padding/radius/border)
+ * in sync with inputStandard above. */
+export const inputStandardRing  = 'w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-ink focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 transition-all';
+
+/* ── Legacy btn-* class compatibility ──────────────────────────────
+ * Pre-split refactor, the .btn-base / .btn-primary / .btn-secondary /
+ * .btn-ghost / .btn-outline / .btn-danger / .btn-warn / .btn-success
+ * styles lived in index.css. The CSS-split refactor removed them, but
+ * 20+ components still reference the class names. Re-export the
+ * equivalent Tailwind utility strings here so those references keep
+ * working AND match the design system.
+ *
+ * v1.79.1 (HOTFIX) — the variants originally referenced `btn-base` as
+ * a CSS class name (which no longer exists), so concatenating
+ * `${btnBase} ${btnPrimary}` produced a button that was missing padding
+ * and border-radius (looked like a dark unstyled block in screenshots).
+ * Fix: each variant inlines the shared base classes directly so the
+ * const works standalone OR concatenated. New code should still prefer
+ * the admin-prefixed variants above for admin UI. */
+export const btnBase       = 'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-accent/30';
+export const btnPrimary    = 'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 bg-accent text-accent-text hover:bg-accent-hover active:bg-accent-hover/90 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-accent/30';
+export const btnSecondary  = 'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 bg-bg-secondary text-ink border border-border hover:bg-mist active:bg-mist/80 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-accent/30';
+export const btnGhost      = 'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 text-ink-soft hover:text-ink hover:bg-mist/60 active:bg-mist disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-accent/30';
+export const btnOutline    = 'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 border border-border text-ink hover:bg-mist active:bg-mist/80 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-accent/30';
+export const btnDanger     = 'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 bg-danger text-white hover:bg-danger/85 active:bg-danger/80 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-accent/30';
+export const btnWarn       = 'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 bg-warning text-white hover:bg-warning/85 active:bg-warning/80 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-accent/30';
+export const btnSuccess    = 'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all duration-200 bg-success text-white hover:bg-success/85 active:bg-success/80 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-accent/30';
