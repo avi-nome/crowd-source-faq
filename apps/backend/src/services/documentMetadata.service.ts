@@ -21,7 +21,6 @@
  *     document title as the summary, so the doc is never *empty*.
  */
 import { z } from 'zod';
-import { chatWithConfig, getPipelineProviderConfig } from '../utils/ai/aiProvider.js';
 import {
   INSIGHT_CATEGORIES,
   INSIGHT_AUDIENCES,
@@ -77,10 +76,19 @@ export async function extractMetadataFromText(
 
   let reply = '';
   try {
-    const cfg = await getPipelineProviderConfig('document_metadata');
-    reply = await chatWithConfig(cfg, [{ role: 'user', content: prompt }], 'document_metadata');
+    // v1.85 — automatic provider failover. If the primary provider
+    // returns a retriable failure (401/429/5xx/network), walk the
+    // configured fallback chain. Errors are still caught here so
+    // we always degrade gracefully to `fallbackMetadata` rather
+    // than letting the upload fail.
+    const { runWithFallback } = await import('./ai/fallbackChain.js');
+    const result = await runWithFallback(
+      'document_metadata',
+      [{ role: 'user', content: prompt }],
+    );
+    reply = result.reply;
   } catch (err) {
-    adminLog.warn(`[documentMetadata] LLM call failed, using fallback: ${(err as Error).message}`);
+    adminLog.warn(`[documentMetadata] all LLM providers failed, using fallback: ${(err as Error).message}`);
     return fallbackMetadata(text, title);
   }
 
