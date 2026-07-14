@@ -36,6 +36,14 @@ export const changePasswordSchema = z.object({
   newPassword:     passwordPolicy,
 });
 
+// v1.85 — admin-initiated password reset for any non-admin user.
+// Body is just the new password (no currentPassword — admin
+// doesn't know it). Reuses the same passwordPolicy as the
+// user-self-change path so the bar is consistent.
+export const adminResetPasswordSchema = z.object({
+  newPassword: passwordPolicy,
+});
+
 export const updateProfileSchema = z.object({
   name:  z.string().min(2).max(100).optional(),
   email: z.string().email().optional(),
